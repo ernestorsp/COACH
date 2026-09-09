@@ -4,199 +4,229 @@
   <base target="_top">
   <meta charset="UTF-8">
   <style>
-    :root {
-      --bg:#f4f6f8;
-      --card:#fff;
-      --text:#0f172a;
-      --muted:#64748b;
-      --line:#e2e8f0;
-      --dark:#111827;
-      --warn:#b42318;
-      --warn-bg:#fff3f2;
-      --shadow:0 8px 26px rgba(15,23,42,.08);
-    }
+    :root{--bg:#f4f6f8;--card:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--dark:#111827;--warn:#b42318;--warn-bg:#fff3f2;--blue:#2563eb;--shadow:0 8px 26px rgba(15,23,42,.08)}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-    .app{max-width:760px;margin:0 auto;min-height:100vh;padding:18px 16px 105px}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-    .brand{display:flex;align-items:center;gap:10px}
-    .logo{width:44px;height:44px;border-radius:14px;background:var(--dark);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px}
-    h1{font-size:20px;margin:0}.subtitle{font-size:12px;color:var(--muted);margin-top:4px}
-    .refresh{border:1px solid var(--line);background:#fff;border-radius:12px;width:42px;height:42px;font-size:20px;cursor:pointer}
-    .filter-card,.stat,.section{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
-    .filter-card{border-radius:18px;padding:14px;margin-bottom:12px}
-    .filter-card label{display:block;font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px}
-    select{width:100%;border:1px solid #cbd5e1;background:#fff;border-radius:13px;padding:12px 13px;font:inherit;font-weight:700;color:var(--text)}
-    .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-    .stat{border-radius:18px;padding:15px}.stat-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.stat-value{font-size:29px;font-weight:900;margin-top:7px}
-    .section{border-radius:20px;padding:15px;margin-bottom:16px}
-    .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section-head h2{font-size:16px;margin:0}
-    .badge{background:var(--warn-bg);color:var(--warn);font-weight:900;font-size:12px;padding:6px 9px;border-radius:999px}
-    .driver-group{margin:0 0 15px}.driver-group:last-child{margin-bottom:0}
-    .driver-name{font-size:13px;font-weight:900;margin:0 0 8px;padding:0 2px;color:#334155;text-transform:uppercase;letter-spacing:.02em}
-    .alert-list{display:grid;gap:9px}
-    .alert{border:1px solid #fecaca;background:#fffafa;border-radius:16px;padding:13px}
-    .stop-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:7px}
-    .stop{flex:none;background:var(--warn);color:#fff;border-radius:10px;padding:6px 9px;font-size:12px;font-weight:900;white-space:nowrap}
-    .address{font-size:15px;font-weight:900;line-height:1.3;padding-top:3px}
-    .details{font-size:13px;line-height:1.45;color:#334155;border-top:1px solid #fee2e2;padding-top:8px}
-    .empty{border:1px dashed #cbd5e1;border-radius:15px;padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}.empty strong{display:block;color:var(--text);font-size:14px;margin-bottom:5px}
-    .loading{text-align:center;color:var(--muted);padding:22px}
-    .fab{position:fixed;right:max(20px,calc((100vw - 760px)/2 + 20px));bottom:24px;width:62px;height:62px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-size:35px;box-shadow:0 12px 28px rgba(15,23,42,.30);cursor:pointer}
-    .overlay{position:fixed;inset:0;background:rgba(15,23,42,.52);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.show{display:flex}
-    .sheet{width:min(760px,100%);background:#fff;border-radius:24px 24px 0 0;padding:18px 16px 28px;max-height:90vh;overflow:auto}.handle{width:44px;height:5px;background:#cbd5e1;border-radius:999px;margin:0 auto 16px}
-    .form-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.form-head h3{margin:0;font-size:18px}.close{width:36px;height:36px;border:0;border-radius:50%;background:#f1f5f9;font-size:19px;cursor:pointer}
-    .field{margin-bottom:14px}.field label{display:block;font-size:13px;font-weight:900;margin-bottom:7px}
-    input,textarea{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:13px 14px;font:inherit;outline:none}textarea{min-height:120px;resize:vertical}input:focus,textarea:focus{border-color:#111827;box-shadow:0 0 0 3px rgba(17,24,39,.08)}
-    .save{width:100%;border:0;border-radius:14px;padding:14px;background:var(--dark);color:#fff;font-size:15px;font-weight:900;cursor:pointer}.save:disabled{opacity:.55}
-    .toast{position:fixed;left:50%;bottom:98px;transform:translateX(-50%);max-width:calc(100vw - 32px);background:#111827;color:#fff;padding:11px 14px;border-radius:12px;font-size:13px;display:none;z-index:40;text-align:center}.toast.show{display:block}.toast.error{background:#b42318}
-    @media(max-width:520px){.fab{right:20px}.stats{grid-template-columns:1fr 1fr}}
+    button,input,textarea,select{font:inherit}
+    .app{max-width:820px;margin:0 auto;min-height:100vh;padding:18px 16px 120px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:10px}.logo{width:44px;height:44px;border-radius:14px;background:var(--dark);color:#fff;display:grid;place-items:center;font-weight:900}.title h1{margin:0;font-size:21px}.title p{margin:3px 0 0;color:var(--muted);font-size:12px}.iconbtn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
+    .page{display:none}.page.active{display:block}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}.stat,.section{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.stat{padding:16px}.stat .label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase}.stat .value{font-size:30px;font-weight:900;margin-top:7px}.section{padding:16px;margin-bottom:16px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section h2{font-size:16px;margin:0}.badge{background:var(--warn-bg);color:var(--warn);border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900}
+    .filter{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;margin-bottom:12px}
+    .list{display:grid;gap:10px}.card{border:1px solid var(--line);border-radius:15px;padding:13px;background:#fff}.driver{font-size:12px;color:var(--blue);font-weight:900;text-transform:uppercase;margin-bottom:6px}.addr{font-size:15px;font-weight:900}.stop{display:inline-block;margin-right:7px;background:#111827;color:#fff;border-radius:8px;padding:4px 7px;font-size:11px}.details{font-size:13px;line-height:1.45;color:#334155;margin-top:8px;white-space:pre-wrap}.meta{font-size:11px;color:var(--muted);margin-top:8px}.empty{border:1px dashed #cbd5e1;border-radius:15px;padding:22px;text-align:center;color:var(--muted)}
+    .db-toolbar{display:flex;gap:8px;margin-bottom:12px}.db-toolbar input{flex:1;border:1px solid var(--line);border-radius:12px;padding:11px 12px}.actions{display:flex;gap:8px;margin-top:12px}.smallbtn{border:none;border-radius:10px;padding:8px 11px;font-weight:800;cursor:pointer}.editbtn{background:#eef2ff;color:#3730a3}.deletebtn{background:#fff1f2;color:#be123c}
+    .fab{position:fixed;right:max(20px,calc((100vw - 820px)/2 + 20px));bottom:78px;width:58px;height:58px;border-radius:50%;border:none;background:var(--dark);color:#fff;font-size:32px;box-shadow:0 14px 28px rgba(15,23,42,.26);cursor:pointer;z-index:8}
+    .bottomnav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(820px,100%);height:64px;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;z-index:7}.navbtn{border:none;background:#fff;color:var(--muted);font-weight:800;cursor:pointer}.navbtn.active{color:var(--dark)}
+    .overlay{position:fixed;inset:0;background:rgba(15,23,42,.48);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.show{display:flex}.sheet{width:min(820px,100%);background:#fff;border-radius:24px 24px 0 0;padding:18px 16px 28px;max-height:92vh;overflow:auto}.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.modal-head h3{margin:0}.close{width:36px;height:36px;border:none;border-radius:50%;background:#f1f5f9;cursor:pointer}.field{margin-bottom:14px}.field label{display:block;font-size:12px;font-weight:900;margin-bottom:7px}.field input,.field textarea{width:100%;border:1px solid #cbd5e1;border-radius:13px;padding:12px 13px;outline:none}.field textarea{min-height:125px;resize:vertical}.primary{width:100%;border:none;border-radius:13px;padding:13px;background:var(--dark);color:#fff;font-weight:900;cursor:pointer}.primary:disabled{opacity:.55}.conflictbox{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:13px;margin-bottom:14px}.conflictbox strong{display:block;margin-bottom:6px}.conflict-actions{display:grid;gap:8px}.conflict-actions button{border:none;border-radius:12px;padding:12px;font-weight:900;cursor:pointer}.overwrite{background:#fee2e2;color:#991b1b}.append{background:#dcfce7;color:#166534}.cancel{background:#e2e8f0;color:#334155}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;background:#111827;color:#fff;border-radius:12px;padding:11px 14px;display:none;z-index:40;max-width:calc(100vw - 32px);text-align:center}.toast.show{display:block}.toast.error{background:#b42318}
+    @media(max-width:520px){.stats{grid-template-columns:1fr}.fab{right:20px}.actions{flex-wrap:wrap}}
   </style>
 </head>
 <body>
   <main class="app">
     <div class="topbar">
-      <div class="brand">
-        <div class="logo">C</div>
-        <div><h1>COACH</h1><div class="subtitle">Complaint Route Alerts</div></div>
+      <div class="brand"><div class="logo">C</div><div class="title"><h1>COACH</h1><p>Complaint Address Monitor</p></div></div>
+      <button class="iconbtn" onclick="refreshCurrent()">↻</button>
+    </div>
+
+    <section id="homePage" class="page active">
+      <div class="stats">
+        <div class="stat"><div class="label">Complaint addresses</div><div class="value" id="totalComplaints">—</div></div>
+        <div class="stat"><div class="label">Alerts today</div><div class="value" id="totalAlerts">—</div></div>
       </div>
-      <button class="refresh" onclick="loadHome()" aria-label="Refresh">↻</button>
-    </div>
-
-    <div class="filter-card">
-      <label for="driverFilter">Driver</label>
-      <select id="driverFilter" onchange="applyFilter()">
-        <option value="">All drivers</option>
-      </select>
-    </div>
-
-    <div class="stats">
-      <div class="stat"><div class="stat-label">Complaint database</div><div class="stat-value" id="totalComplaints">—</div></div>
-      <div class="stat"><div class="stat-label">Stops to watch</div><div class="stat-value" id="totalAlerts">—</div></div>
-    </div>
-
-    <section class="section">
-      <div class="section-head">
-        <h2>⚠️ Today's complaint stops</h2>
-        <span class="badge" id="alertBadge">0 stops</span>
+      <div class="section">
+        <div class="section-head"><h2>⚠️ Alerts today</h2><span class="badge" id="alertBadge">0 stops</span></div>
+        <select class="filter" id="driverFilter" onchange="renderAlerts()"><option value="">All drivers</option></select>
+        <div id="alertsContainer" class="empty">Loading...</div>
       </div>
-      <div id="alertsContainer" class="loading">Loading routes...</div>
+      <div class="section">
+        <div class="section-head"><h2>Recently added</h2></div>
+        <div id="recentContainer" class="empty">Loading...</div>
+      </div>
+    </section>
+
+    <section id="databasePage" class="page">
+      <div class="section">
+        <div class="section-head"><h2>🗂️ Address database</h2><span class="badge" id="dbCount">0</span></div>
+        <div class="db-toolbar"><input id="dbSearch" placeholder="Search address or notes..." oninput="renderDatabase()"></div>
+        <div id="databaseContainer" class="empty">Loading...</div>
+      </div>
     </section>
   </main>
 
-  <button class="fab" onclick="openForm()" aria-label="Add complaint address">+</button>
+  <button class="fab" onclick="openAdd()">+</button>
+  <nav class="bottomnav">
+    <button id="navHome" class="navbtn active" onclick="showPage('home')">🏠 Home</button>
+    <button id="navDatabase" class="navbtn" onclick="showPage('database')">🗂️ Database</button>
+  </nav>
 
-  <div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="overlay" id="formOverlay" onclick="if(event.target===this) closeForm()">
     <div class="sheet">
-      <div class="handle"></div>
-      <div class="form-head"><h3>New complaint address</h3><button class="close" onclick="closeForm()">×</button></div>
-      <div class="field">
-        <label for="address">Address</label>
-        <input id="address" type="text" placeholder="2909 Iroquois Ave" autocomplete="street-address">
+      <div class="modal-head"><h3 id="formTitle">New complaint address</h3><button class="close" onclick="closeForm()">×</button></div>
+      <input type="hidden" id="editId">
+      <div class="field"><label>Address</label><input id="address" autocomplete="street-address" placeholder="123 Main St, Jacksonville, FL"></div>
+      <div class="field"><label>Notes / complaint details</label><textarea id="details" placeholder="What should the driver be careful about?"></textarea></div>
+      <button class="primary" id="saveBtn" onclick="saveForm()">Save address</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="conflictOverlay">
+    <div class="sheet">
+      <div class="modal-head"><h3>Address already exists</h3><button class="close" onclick="cancelConflict()">×</button></div>
+      <div class="conflictbox">
+        <strong id="conflictAddress"></strong>
+        <div class="meta">Current notes</div>
+        <div class="details" id="conflictExisting"></div>
+        <div class="meta" style="margin-top:12px">New notes</div>
+        <div class="details" id="conflictIncoming"></div>
       </div>
-      <div class="field">
-        <label for="details">What should the driver be careful about?</label>
-        <textarea id="details" placeholder="Example: Leave only at front door. Verify the house number and take a clear photo."></textarea>
+      <div class="conflict-actions">
+        <button class="overwrite" onclick="resolveConflict('overwrite')">Overwrite — replace the old record</button>
+        <button class="append" onclick="resolveConflict('add')">Add — keep it and add these notes</button>
+        <button class="cancel" onclick="cancelConflict()">Cancel — make no changes</button>
       </div>
-      <button class="save" id="saveBtn" onclick="saveComplaint()">Save address</button>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
-    let HOME_DATA = {alerts:[],drivers:[]};
+    let homeData={alerts:[],recent:[],drivers:[]};
+    let dbData=[];
+    let pendingDuplicate=null;
 
-    document.addEventListener('DOMContentLoaded', loadHome);
+    document.addEventListener('DOMContentLoaded',()=>{loadHome();loadDatabase();});
+
+    function showPage(page){
+      const home=page==='home';
+      document.getElementById('homePage').classList.toggle('active',home);
+      document.getElementById('databasePage').classList.toggle('active',!home);
+      document.getElementById('navHome').classList.toggle('active',home);
+      document.getElementById('navDatabase').classList.toggle('active',!home);
+      if(!home) loadDatabase();
+    }
+
+    function refreshCurrent(){
+      if(document.getElementById('homePage').classList.contains('active')) loadHome();
+      else loadDatabase();
+    }
 
     function loadHome(){
-      document.getElementById('alertsContainer').innerHTML='<div class="loading">Loading routes...</div>';
-      google.script.run
-        .withSuccessHandler(renderHome)
-        .withFailureHandler(err=>{
-          document.getElementById('alertsContainer').innerHTML='<div class="empty"><strong>Could not load routes.</strong>'+escapeHtml(errorMessage(err))+'</div>';
-          showToast(errorMessage(err),true);
-        })
-        .getHomeData();
+      google.script.run.withSuccessHandler(data=>{
+        homeData=data||{alerts:[],recent:[],drivers:[]};
+        document.getElementById('totalComplaints').textContent=homeData.totalComplaints||0;
+        renderDriverFilter();renderAlerts();renderRecent();
+      }).withFailureHandler(err=>showToast(errorMessage(err),true)).getHomeData();
     }
 
-    function renderHome(data){
-      HOME_DATA=data||{alerts:[],drivers:[]};
-      HOME_DATA.alerts=Array.isArray(HOME_DATA.alerts)?HOME_DATA.alerts:[];
-      HOME_DATA.drivers=Array.isArray(HOME_DATA.drivers)?HOME_DATA.drivers:[];
-
-      document.getElementById('totalComplaints').textContent=HOME_DATA.totalComplaints||0;
-
-      const select=document.getElementById('driverFilter');
-      const selected=select.value;
-      select.innerHTML='<option value="">All drivers</option>'+HOME_DATA.drivers.map(d=>`<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
-      if(HOME_DATA.drivers.includes(selected)) select.value=selected;
-
-      applyFilter();
+    function renderDriverFilter(){
+      const sel=document.getElementById('driverFilter');
+      const current=sel.value;
+      sel.innerHTML='<option value="">All drivers</option>'+(homeData.drivers||[]).map(d=>`<option value="${escAttr(d)}">${esc(d)}</option>`).join('');
+      if([...sel.options].some(o=>o.value===current)) sel.value=current;
     }
 
-    function applyFilter(){
-      const driver=document.getElementById('driverFilter').value;
-      const alerts=HOME_DATA.alerts.filter(a=>!driver||a.driver===driver);
-      document.getElementById('totalAlerts').textContent=alerts.length;
+    function renderAlerts(){
+      const selected=document.getElementById('driverFilter').value;
+      const alerts=(homeData.alerts||[]).filter(a=>!selected||a.driver===selected);
+      document.getElementById('totalAlerts').textContent=(homeData.alerts||[]).length;
       document.getElementById('alertBadge').textContent=`${alerts.length} ${alerts.length===1?'stop':'stops'}`;
-      renderAlerts(alerts,driver);
+      const box=document.getElementById('alertsContainer');
+      if(!alerts.length){box.className='empty';box.innerHTML='<strong>No complaint stops found.</strong><br>Only route addresses that match the database appear here.';return;}
+      box.className='list';box.innerHTML=alerts.map(a=>`<div class="card"><div class="driver">${esc(a.driver)}</div><div class="addr"><span class="stop">STOP ${esc(a.stop)}</span>${esc(a.address)}</div><div class="details">${esc(a.details)}</div></div>`).join('');
     }
 
-    function renderAlerts(alerts,selectedDriver){
-      const container=document.getElementById('alertsContainer');
-      if(!alerts.length){
-        container.innerHTML=`<div class="empty"><strong>No complaint stops found${selectedDriver?' for this driver':''}.</strong>The route was checked against the complaint address database.</div>`;
-        return;
-      }
-
-      const groups={};
-      alerts.forEach(a=>{(groups[a.driver]||(groups[a.driver]=[])).push(a)});
-      container.innerHTML=Object.keys(groups).map(driver=>`
-        <div class="driver-group">
-          <div class="driver-name">${escapeHtml(driver)}</div>
-          <div class="alert-list">
-            ${groups[driver].map(a=>`
-              <div class="alert">
-                <div class="stop-row">
-                  <span class="stop">STOP ${escapeHtml(a.stop)}</span>
-                  <div class="address">${escapeHtml(a.address)}</div>
-                </div>
-                <div class="details">${escapeHtml(a.details)}</div>
-              </div>`).join('')}
-          </div>
-        </div>`).join('');
+    function renderRecent(){
+      const box=document.getElementById('recentContainer');
+      const rows=homeData.recent||[];
+      if(!rows.length){box.className='empty';box.textContent='No complaint addresses yet.';return;}
+      box.className='list';box.innerHTML=rows.map(r=>`<div class="card"><div class="addr">${esc(r.address)}</div><div class="details">${esc(r.details)}</div><div class="meta">${esc(r.date||'')}</div></div>`).join('');
     }
 
-    function openForm(){document.getElementById('overlay').classList.add('show');setTimeout(()=>document.getElementById('address').focus(),120)}
-    function closeForm(){document.getElementById('overlay').classList.remove('show')}
-    function overlayClick(e){if(e.target.id==='overlay')closeForm()}
+    function loadDatabase(){
+      google.script.run.withSuccessHandler(rows=>{dbData=rows||[];renderDatabase();}).withFailureHandler(err=>showToast(errorMessage(err),true)).getComplaints();
+    }
 
-    function saveComplaint(){
+    function renderDatabase(){
+      const q=(document.getElementById('dbSearch').value||'').trim().toLowerCase();
+      const rows=dbData.filter(r=>!q||`${r.address} ${r.details}`.toLowerCase().includes(q));
+      document.getElementById('dbCount').textContent=`${dbData.length} addresses`;
+      const box=document.getElementById('databaseContainer');
+      if(!rows.length){box.className='empty';box.textContent=q?'No results.':'The database is empty.';return;}
+      box.className='list';box.innerHTML=rows.map(r=>`<div class="card"><div class="addr">${esc(r.address)}</div><div class="details">${esc(r.details)}</div><div class="meta">${esc(r.date||'')}</div><div class="actions"><button class="smallbtn editbtn" onclick="openEdit('${escJs(r.id)}')">✏️ Edit</button><button class="smallbtn deletebtn" onclick="removeAddress('${escJs(r.id)}','${escJs(r.address)}')">🗑️ Delete</button></div></div>`).join('');
+    }
+
+    function openAdd(){
+      document.getElementById('formTitle').textContent='New complaint address';
+      document.getElementById('editId').value='';
+      document.getElementById('address').value='';
+      document.getElementById('details').value='';
+      document.getElementById('saveBtn').textContent='Save address';
+      document.getElementById('formOverlay').classList.add('show');
+      setTimeout(()=>document.getElementById('address').focus(),120);
+    }
+
+    function openEdit(id){
+      const r=dbData.find(x=>x.id===id);if(!r)return;
+      document.getElementById('formTitle').textContent='Edit complaint address';
+      document.getElementById('editId').value=r.id;
+      document.getElementById('address').value=r.address||'';
+      document.getElementById('details').value=r.details||'';
+      document.getElementById('saveBtn').textContent='Save changes';
+      document.getElementById('formOverlay').classList.add('show');
+    }
+
+    function closeForm(){document.getElementById('formOverlay').classList.remove('show');}
+
+    function saveForm(){
+      const id=document.getElementById('editId').value;
       const address=document.getElementById('address').value.trim();
       const details=document.getElementById('details').value.trim();
       const btn=document.getElementById('saveBtn');
       if(!address)return showToast('Enter the address.',true);
-      if(!details)return showToast('Enter the complaint details.',true);
+      if(!details)return showToast('Enter the notes.',true);
+      btn.disabled=true;
 
-      btn.disabled=true;btn.textContent='Saving...';
-      google.script.run
-        .withSuccessHandler(result=>{
-          btn.disabled=false;btn.textContent='Save address';
-          document.getElementById('address').value='';document.getElementById('details').value='';
-          closeForm();showToast(result&&result.updated?'Complaint address updated.':'Complaint address saved.');loadHome();
-        })
-        .withFailureHandler(err=>{btn.disabled=false;btn.textContent='Save address';showToast(errorMessage(err),true)})
-        .addComplaint({address,details});
+      const success=res=>{
+        btn.disabled=false;
+        if(res&&res.conflict){
+          pendingDuplicate={address,details};
+          closeForm();
+          document.getElementById('conflictAddress').textContent=res.existing.address||address;
+          document.getElementById('conflictExisting').textContent=res.existing.details||'';
+          document.getElementById('conflictIncoming').textContent=details;
+          document.getElementById('conflictOverlay').classList.add('show');
+          return;
+        }
+        closeForm();showToast(id?'Changes saved.':'Address saved.');loadHome();loadDatabase();
+      };
+      const fail=err=>{btn.disabled=false;showToast(errorMessage(err),true);};
+
+      if(id) google.script.run.withSuccessHandler(success).withFailureHandler(fail).updateComplaint({id,address,details});
+      else google.script.run.withSuccessHandler(success).withFailureHandler(fail).addComplaint({address,details});
     }
 
-    function showToast(message,isError){
-      const t=document.getElementById('toast');t.textContent=message;t.className=`toast show${isError?' error':''}`;
-      clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>t.className='toast',2800);
+    function resolveConflict(action){
+      if(!pendingDuplicate)return cancelConflict();
+      const payload={...pendingDuplicate,duplicateAction:action};
+      google.script.run.withSuccessHandler(()=>{
+        pendingDuplicate=null;document.getElementById('conflictOverlay').classList.remove('show');
+        showToast(action==='overwrite'?'Old record replaced.':'Notes added to existing address.');loadHome();loadDatabase();
+      }).withFailureHandler(err=>showToast(errorMessage(err),true)).addComplaint(payload);
     }
-    function errorMessage(err){return err?(err.message||String(err)):'Something went wrong.'}
-    function escapeHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
-    function escapeAttr(v){return escapeHtml(v)}
+
+    function cancelConflict(){pendingDuplicate=null;document.getElementById('conflictOverlay').classList.remove('show');showToast('No changes made.');}
+
+    function removeAddress(id,address){
+      if(!confirm(`Delete this address?\n\n${address}`))return;
+      google.script.run.withSuccessHandler(()=>{showToast('Address deleted.');loadHome();loadDatabase();}).withFailureHandler(err=>showToast(errorMessage(err),true)).deleteComplaint(id);
+    }
+
+    function showToast(message,isError){const t=document.getElementById('toast');t.textContent=message;t.className=`toast show${isError?' error':''}`;clearTimeout(window.__t);window.__t=setTimeout(()=>t.className='toast',2600);}
+    function errorMessage(err){return err&&err.message?err.message:String(err||'Something went wrong.');}
+    function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+    function escAttr(v){return esc(v);}
+    function escJs(v){return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,' ');}
   </script>
 </body>
 </html>
