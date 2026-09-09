@@ -3,12 +3,20 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      ".firebaserc",
       "**/.*",
       "**/node_modules/**",
       "Code.gs",
-      "appsscript.json"
+      "appsscript.json",
+      "Index.html"
     ],
     "cleanUrls": true,
     "trailingSlash": false
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }
