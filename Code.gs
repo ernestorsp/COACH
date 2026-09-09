@@ -30,7 +30,6 @@ function doGet() {
 function PREPARE_DATABASE() {
   const ss = getSS_();
   let sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
-
   if (!sh) sh = ss.insertSheet(CONFIG.COMPLAINTS_SHEET);
 
   const headers = ['ID', 'ADDRESS', 'NORMALIZED_ADDRESS', 'DETAILS', 'DATE', 'ACTIVE'];
@@ -55,38 +54,154 @@ function PREPARE_DATABASE() {
   return true;
 }
 
+/**
+ * HOME data:
+ * 1) Reads active complaint addresses from Complaints.
+ * 2) Reads each driver listed in Driver!A2:A.
+ * 3) In each driver's sheet, only extracts STOP + ADDRESS from column A.
+ * 4) Matches normalized route addresses against the complaint database.
+ */
 function getHomeData() {
   PREPARE_DATABASE();
 
   const ss = getSS_();
-  const sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
-  const lastRow = sh.getLastRow();
+  const complaints = getActiveComplaints_(ss);
+  const complaintMap = new Map();
 
-  let total = 0;
-  let recent = [];
+  complaints.forEach(c => complaintMap.set(c.normalizedAddress, c));
 
-  if (lastRow >= 2) {
-    const values = sh.getRange(2, 1, lastRow - 1, 6).getDisplayValues();
-    const activeRows = values.filter(r => String(r[5]).toUpperCase() !== 'FALSE');
-    total = activeRows.length;
+  const drivers = getDriverNames_(ss);
+  const alerts = [];
 
-    recent = activeRows
-      .slice(-8)
-      .reverse()
-      .map(r => ({
-        id: r[0],
-        address: r[1],
-        details: r[3],
-        date: r[4]
-      }));
-  }
+  drivers.forEach(driver => {
+    const sh = ss.getSheetByName(driver);
+    if (!sh || sh.getLastRow() < 1) return;
+
+    const routeStops = parseDriverRoute_(sh);
+
+    routeStops.forEach(route => {
+      const normalized = normalizeAddress_(route.address);
+      const complaint = complaintMap.get(normalized);
+      if (!complaint) return;
+
+      alerts.push({
+        driver: driver,
+        stop: route.stop,
+        address: route.address,
+        details: complaint.details,
+        complaintAddress: complaint.address,
+        complaintId: complaint.id
+      });
+    });
+  });
+
+  alerts.sort((a, b) => {
+    const driverCompare = a.driver.localeCompare(b.driver);
+    if (driverCompare !== 0) return driverCompare;
+    return Number(a.stop) - Number(b.stop);
+  });
+
+  const recent = complaints
+    .slice(-8)
+    .reverse()
+    .map(c => ({
+      id: c.id,
+      address: c.address,
+      details: c.details,
+      date: c.date
+    }));
+
+  const driversWithAlerts = [...new Set(alerts.map(a => a.driver))];
 
   return {
-    totalComplaints: total,
-    alerts: [],
+    totalComplaints: complaints.length,
+    alerts: alerts,
     recent: recent,
-    routeMatchingReady: false
+    drivers: drivers,
+    driversWithAlerts: driversWithAlerts,
+    routeMatchingReady: true
   };
+}
+
+function getActiveComplaints_(ss) {
+  const sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+
+  return sh.getRange(2, 1, lastRow - 1, 6).getDisplayValues()
+    .filter(r => cleanText_(r[1]) && String(r[5]).toUpperCase() !== 'FALSE')
+    .map(r => ({
+      id: r[0],
+      address: r[1],
+      normalizedAddress: r[2] || normalizeAddress_(r[1]),
+      details: r[3],
+      date: r[4]
+    }));
+}
+
+function getDriverNames_(ss) {
+  const sh = ss.getSheetByName(CONFIG.DRIVER_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+
+  return [...new Set(
+    sh.getRange(2, 1, sh.getLastRow() - 1, 1)
+      .getDisplayValues()
+      .flat()
+      .map(cleanText_)
+      .filter(Boolean)
+  )];
+}
+
+/**
+ * Route format example in column A:
+ * 3
+ * 2721 Apache Ave
+ * CX143
+ * 1/1 delivery Front door...
+ * (Planned ...)
+ *
+ * We ONLY care about the numeric stop and the address immediately after it.
+ * Lines such as CX143, delivery details, Planned, pickups and Multi-location stop
+ * are ignored.
+ */
+function parseDriverRoute_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const lines = sheet.getRange(1, 1, lastRow, 1)
+    .getDisplayValues()
+    .flat()
+    .map(v => cleanText_(v));
+
+  const stops = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
+    if (!/^\d+$/.test(current)) continue;
+
+    let j = i + 1;
+    while (j < lines.length && !lines[j]) j++;
+    if (j >= lines.length) continue;
+
+    const address = lines[j];
+    if (!looksLikeStreetAddress_(address)) continue;
+
+    stops.push({
+      stop: Number(current),
+      address: address
+    });
+  }
+
+  return stops;
+}
+
+function looksLikeStreetAddress_(value) {
+  const s = cleanText_(value);
+  if (!s) return false;
+
+  // Daily route addresses begin with a street number. This avoids treating
+  // route metadata such as "pickups", "CX143", "Planned..." as addresses.
+  return /^\d+[A-Z0-9-]*\s+.+/i.test(s);
 }
 
 function addComplaint(payload) {
@@ -104,24 +219,47 @@ function addComplaint(payload) {
 
   const ss = getSS_();
   const sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
-
-  const id = Utilities.getUuid();
   const now = new Date();
 
-  sh.appendRow([
-    id,
-    address,
-    normalized,
-    details,
-    now,
-    true
-  ]);
+  // Keep one active database record per normalized address.
+  if (sh.getLastRow() >= 2) {
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getDisplayValues();
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (String(rows[i][5]).toUpperCase() === 'FALSE') continue;
+      const existingNormalized = rows[i][2] || normalizeAddress_(rows[i][1]);
+      if (existingNormalized !== normalized) continue;
 
+      const rowNumber = i + 2;
+      sh.getRange(rowNumber, 2, 1, 5).setValues([[
+        address,
+        normalized,
+        details,
+        now,
+        true
+      ]]);
+      sh.getRange(rowNumber, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
+
+      return {
+        ok: true,
+        updated: true,
+        complaint: {
+          id: rows[i][0],
+          address: address,
+          details: details,
+          date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
+        }
+      };
+    }
+  }
+
+  const id = Utilities.getUuid();
+  sh.appendRow([id, address, normalized, details, now, true]);
   const row = sh.getLastRow();
   sh.getRange(row, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
 
   return {
     ok: true,
+    updated: false,
     complaint: {
       id: id,
       address: address,
@@ -153,6 +291,8 @@ function normalizeAddress_(value) {
     [/\bHIGHWAY\b/g, 'HWY'],
     [/\bPLACE\b/g, 'PL'],
     [/\bTERRACE\b/g, 'TER'],
+    [/\bAPARTMENT\b/g, 'APT'],
+    [/\bSUITE\b/g, 'STE'],
     [/\bNORTH\b/g, 'N'],
     [/\bSOUTH\b/g, 'S'],
     [/\bEAST\b/g, 'E'],
