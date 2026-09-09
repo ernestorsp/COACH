@@ -150,7 +150,6 @@
     function markDone(index,btn){
       const a=(window.__visibleAlerts||[])[index];
       if(!a)return;
-      if(!confirm(`Mark this stop as completed?\n\n${a.driver}\nSTOP ${a.stop} — ${a.address}`))return;
       btn.disabled=true;
       google.script.run.withSuccessHandler(()=>{
         showToast('Stop completed.');
