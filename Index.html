@@ -5,323 +5,52 @@
   <meta charset="UTF-8">
   <style>
     :root {
-      --bg: #f5f7fb;
-      --card: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --line: #e5e7eb;
-      --accent: #111827;
-      --danger: #b42318;
-      --danger-soft: #fff1f0;
-      --ok: #067647;
-      --shadow: 0 10px 30px rgba(17,24,39,.08);
+      --bg:#f4f6f8;
+      --card:#fff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --line:#e2e8f0;
+      --dark:#111827;
+      --warn:#b42318;
+      --warn-bg:#fff3f2;
+      --shadow:0 8px 26px rgba(15,23,42,.08);
     }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, Helvetica, sans-serif;
-    }
-
-    .app {
-      max-width: 760px;
-      margin: 0 auto;
-      min-height: 100vh;
-      padding: 18px 16px 100px;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .logo {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: #111827;
-      color: white;
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      letter-spacing: .5px;
-    }
-
-    .title h1 {
-      font-size: 20px;
-      margin: 0;
-      line-height: 1.1;
-    }
-
-    .title p {
-      margin: 4px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .refresh {
-      border: 1px solid var(--line);
-      background: white;
-      border-radius: 12px;
-      padding: 10px 12px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: var(--shadow);
-    }
-
-    .stat .label {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-    }
-
-    .stat .value {
-      font-size: 30px;
-      font-weight: 800;
-      margin-top: 8px;
-    }
-
-    .section {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 16px;
-      box-shadow: var(--shadow);
-      margin-bottom: 16px;
-    }
-
-    .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .section h2 {
-      margin: 0;
-      font-size: 16px;
-    }
-
-    .badge {
-      border-radius: 999px;
-      background: var(--danger-soft);
-      color: var(--danger);
-      font-size: 12px;
-      font-weight: 800;
-      padding: 6px 9px;
-    }
-
-    .empty {
-      border: 1px dashed #d1d5db;
-      border-radius: 16px;
-      padding: 22px 16px;
-      text-align: center;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .empty strong {
-      display: block;
-      color: var(--text);
-      margin-bottom: 5px;
-    }
-
-    .recent-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .recent-item {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-    }
-
-    .recent-address {
-      font-weight: 800;
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-
-    .recent-details {
-      font-size: 13px;
-      line-height: 1.4;
-      color: #374151;
-    }
-
-    .recent-date {
-      margin-top: 7px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .fab {
-      position: fixed;
-      right: max(20px, calc((100vw - 760px)/2 + 20px));
-      bottom: 24px;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      border: none;
-      background: #111827;
-      color: white;
-      font-size: 34px;
-      line-height: 1;
-      box-shadow: 0 12px 28px rgba(17,24,39,.28);
-      cursor: pointer;
-    }
-
-    .overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(17,24,39,.48);
-      display: none;
-      align-items: flex-end;
-      justify-content: center;
-      z-index: 20;
-    }
-
-    .overlay.show { display: flex; }
-
-    .sheet {
-      width: min(760px, 100%);
-      background: white;
-      border-radius: 24px 24px 0 0;
-      padding: 18px 16px 28px;
-      max-height: 90vh;
-      overflow: auto;
-    }
-
-    .handle {
-      width: 44px;
-      height: 5px;
-      border-radius: 999px;
-      background: #d1d5db;
-      margin: 0 auto 16px;
-    }
-
-    .form-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .form-title h3 { margin: 0; }
-
-    .close {
-      border: none;
-      background: #f3f4f6;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 18px;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: 800;
-      margin: 0 0 7px;
-    }
-
-    input, textarea {
-      width: 100%;
-      border: 1px solid #d1d5db;
-      border-radius: 14px;
-      padding: 13px 14px;
-      font: inherit;
-      outline: none;
-      background: white;
-    }
-
-    textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-
-    input:focus, textarea:focus {
-      border-color: #111827;
-      box-shadow: 0 0 0 3px rgba(17,24,39,.08);
-    }
-
-    .field { margin-bottom: 14px; }
-
-    .save {
-      width: 100%;
-      border: none;
-      border-radius: 14px;
-      background: #111827;
-      color: white;
-      padding: 14px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .save:disabled { opacity: .55; cursor: not-allowed; }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 96px;
-      background: #111827;
-      color: white;
-      padding: 11px 14px;
-      border-radius: 12px;
-      font-size: 13px;
-      box-shadow: var(--shadow);
-      display: none;
-      z-index: 40;
-      max-width: calc(100vw - 32px);
-      text-align: center;
-    }
-
-    .toast.show { display: block; }
-    .toast.error { background: #b42318; }
-
-    .loading {
-      color: var(--muted);
-      text-align: center;
-      padding: 18px;
-    }
-
-    @media (max-width: 520px) {
-      .stats { grid-template-columns: 1fr; }
-      .fab { right: 20px; }
-    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+    .app{max-width:760px;margin:0 auto;min-height:100vh;padding:18px 16px 105px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:44px;height:44px;border-radius:14px;background:var(--dark);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px}
+    h1{font-size:20px;margin:0}.subtitle{font-size:12px;color:var(--muted);margin-top:4px}
+    .refresh{border:1px solid var(--line);background:#fff;border-radius:12px;width:42px;height:42px;font-size:20px;cursor:pointer}
+    .filter-card,.stat,.section{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+    .filter-card{border-radius:18px;padding:14px;margin-bottom:12px}
+    .filter-card label{display:block;font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px}
+    select{width:100%;border:1px solid #cbd5e1;background:#fff;border-radius:13px;padding:12px 13px;font:inherit;font-weight:700;color:var(--text)}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .stat{border-radius:18px;padding:15px}.stat-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.stat-value{font-size:29px;font-weight:900;margin-top:7px}
+    .section{border-radius:20px;padding:15px;margin-bottom:16px}
+    .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section-head h2{font-size:16px;margin:0}
+    .badge{background:var(--warn-bg);color:var(--warn);font-weight:900;font-size:12px;padding:6px 9px;border-radius:999px}
+    .driver-group{margin:0 0 15px}.driver-group:last-child{margin-bottom:0}
+    .driver-name{font-size:13px;font-weight:900;margin:0 0 8px;padding:0 2px;color:#334155;text-transform:uppercase;letter-spacing:.02em}
+    .alert-list{display:grid;gap:9px}
+    .alert{border:1px solid #fecaca;background:#fffafa;border-radius:16px;padding:13px}
+    .stop-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:7px}
+    .stop{flex:none;background:var(--warn);color:#fff;border-radius:10px;padding:6px 9px;font-size:12px;font-weight:900;white-space:nowrap}
+    .address{font-size:15px;font-weight:900;line-height:1.3;padding-top:3px}
+    .details{font-size:13px;line-height:1.45;color:#334155;border-top:1px solid #fee2e2;padding-top:8px}
+    .empty{border:1px dashed #cbd5e1;border-radius:15px;padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}.empty strong{display:block;color:var(--text);font-size:14px;margin-bottom:5px}
+    .loading{text-align:center;color:var(--muted);padding:22px}
+    .fab{position:fixed;right:max(20px,calc((100vw - 760px)/2 + 20px));bottom:24px;width:62px;height:62px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-size:35px;box-shadow:0 12px 28px rgba(15,23,42,.30);cursor:pointer}
+    .overlay{position:fixed;inset:0;background:rgba(15,23,42,.52);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.show{display:flex}
+    .sheet{width:min(760px,100%);background:#fff;border-radius:24px 24px 0 0;padding:18px 16px 28px;max-height:90vh;overflow:auto}.handle{width:44px;height:5px;background:#cbd5e1;border-radius:999px;margin:0 auto 16px}
+    .form-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.form-head h3{margin:0;font-size:18px}.close{width:36px;height:36px;border:0;border-radius:50%;background:#f1f5f9;font-size:19px;cursor:pointer}
+    .field{margin-bottom:14px}.field label{display:block;font-size:13px;font-weight:900;margin-bottom:7px}
+    input,textarea{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:13px 14px;font:inherit;outline:none}textarea{min-height:120px;resize:vertical}input:focus,textarea:focus{border-color:#111827;box-shadow:0 0 0 3px rgba(17,24,39,.08)}
+    .save{width:100%;border:0;border-radius:14px;padding:14px;background:var(--dark);color:#fff;font-size:15px;font-weight:900;cursor:pointer}.save:disabled{opacity:.55}
+    .toast{position:fixed;left:50%;bottom:98px;transform:translateX(-50%);max-width:calc(100vw - 32px);background:#111827;color:#fff;padding:11px 14px;border-radius:12px;font-size:13px;display:none;z-index:40;text-align:center}.toast.show{display:block}.toast.error{background:#b42318}
+    @media(max-width:520px){.fab{right:20px}.stats{grid-template-columns:1fr 1fr}}
   </style>
 </head>
 <body>
@@ -329,38 +58,29 @@
     <div class="topbar">
       <div class="brand">
         <div class="logo">C</div>
-        <div class="title">
-          <h1>COACH</h1>
-          <p>Complaint Address Monitor</p>
-        </div>
+        <div><h1>COACH</h1><div class="subtitle">Complaint Route Alerts</div></div>
       </div>
       <button class="refresh" onclick="loadHome()" aria-label="Refresh">↻</button>
     </div>
 
+    <div class="filter-card">
+      <label for="driverFilter">Driver</label>
+      <select id="driverFilter" onchange="applyFilter()">
+        <option value="">All drivers</option>
+      </select>
+    </div>
+
     <div class="stats">
-      <div class="stat">
-        <div class="label">Complaint addresses</div>
-        <div class="value" id="totalComplaints">—</div>
-      </div>
-      <div class="stat">
-        <div class="label">Alerts today</div>
-        <div class="value" id="totalAlerts">—</div>
-      </div>
+      <div class="stat"><div class="stat-label">Complaint database</div><div class="stat-value" id="totalComplaints">—</div></div>
+      <div class="stat"><div class="stat-label">Stops to watch</div><div class="stat-value" id="totalAlerts">—</div></div>
     </div>
 
     <section class="section">
       <div class="section-head">
-        <h2>⚠️ Alerts today</h2>
+        <h2>⚠️ Today's complaint stops</h2>
         <span class="badge" id="alertBadge">0 stops</span>
       </div>
-      <div id="alertsContainer" class="loading">Loading...</div>
-    </section>
-
-    <section class="section">
-      <div class="section-head">
-        <h2>Recently added</h2>
-      </div>
-      <div id="recentContainer" class="loading">Loading...</div>
+      <div id="alertsContainer" class="loading">Loading routes...</div>
     </section>
   </main>
 
@@ -369,21 +89,15 @@
   <div class="overlay" id="overlay" onclick="overlayClick(event)">
     <div class="sheet">
       <div class="handle"></div>
-      <div class="form-title">
-        <h3>New complaint address</h3>
-        <button class="close" onclick="closeForm()">×</button>
-      </div>
-
+      <div class="form-head"><h3>New complaint address</h3><button class="close" onclick="closeForm()">×</button></div>
       <div class="field">
         <label for="address">Address</label>
-        <input id="address" type="text" placeholder="123 Main St, Jacksonville, FL" autocomplete="street-address">
+        <input id="address" type="text" placeholder="2909 Iroquois Ave" autocomplete="street-address">
       </div>
-
       <div class="field">
         <label for="details">What should the driver be careful about?</label>
-        <textarea id="details" placeholder="Example: Customer says leave only at front door. Take a clear photo and verify house number."></textarea>
+        <textarea id="details" placeholder="Example: Leave only at front door. Verify the house number and take a clear photo."></textarea>
       </div>
-
       <button class="save" id="saveBtn" onclick="saveComplaint()">Save address</button>
     </div>
   </div>
@@ -391,132 +105,98 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    let HOME_DATA = {alerts:[],drivers:[]};
+
     document.addEventListener('DOMContentLoaded', loadHome);
 
-    function loadHome() {
-      document.getElementById('alertsContainer').innerHTML = '<div class="loading">Loading...</div>';
-      document.getElementById('recentContainer').innerHTML = '<div class="loading">Loading...</div>';
-
+    function loadHome(){
+      document.getElementById('alertsContainer').innerHTML='<div class="loading">Loading routes...</div>';
       google.script.run
         .withSuccessHandler(renderHome)
-        .withFailureHandler(err => showToast(errorMessage(err), true))
+        .withFailureHandler(err=>{
+          document.getElementById('alertsContainer').innerHTML='<div class="empty"><strong>Could not load routes.</strong>'+escapeHtml(errorMessage(err))+'</div>';
+          showToast(errorMessage(err),true);
+        })
         .getHomeData();
     }
 
-    function renderHome(data) {
-      data = data || {};
-      const alerts = Array.isArray(data.alerts) ? data.alerts : [];
-      const recent = Array.isArray(data.recent) ? data.recent : [];
+    function renderHome(data){
+      HOME_DATA=data||{alerts:[],drivers:[]};
+      HOME_DATA.alerts=Array.isArray(HOME_DATA.alerts)?HOME_DATA.alerts:[];
+      HOME_DATA.drivers=Array.isArray(HOME_DATA.drivers)?HOME_DATA.drivers:[];
 
-      document.getElementById('totalComplaints').textContent = data.totalComplaints || 0;
-      document.getElementById('totalAlerts').textContent = alerts.length;
-      document.getElementById('alertBadge').textContent = `${alerts.length} ${alerts.length === 1 ? 'stop' : 'stops'}`;
+      document.getElementById('totalComplaints').textContent=HOME_DATA.totalComplaints||0;
 
-      if (!alerts.length) {
-        document.getElementById('alertsContainer').innerHTML = `
-          <div class="empty">
-            <strong>No complaint stops loaded yet.</strong>
-            When route matching is added, this area will show only the stops from today's routes that match the complaint database.
-          </div>`;
-      } else {
-        document.getElementById('alertsContainer').innerHTML = alerts.map(a => `
-          <div class="recent-item">
-            <div class="recent-address">STOP ${escapeHtml(a.stop || '')} · ${escapeHtml(a.address || '')}</div>
-            <div class="recent-details">${escapeHtml(a.details || '')}</div>
-          </div>`).join('');
+      const select=document.getElementById('driverFilter');
+      const selected=select.value;
+      select.innerHTML='<option value="">All drivers</option>'+HOME_DATA.drivers.map(d=>`<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
+      if(HOME_DATA.drivers.includes(selected)) select.value=selected;
+
+      applyFilter();
+    }
+
+    function applyFilter(){
+      const driver=document.getElementById('driverFilter').value;
+      const alerts=HOME_DATA.alerts.filter(a=>!driver||a.driver===driver);
+      document.getElementById('totalAlerts').textContent=alerts.length;
+      document.getElementById('alertBadge').textContent=`${alerts.length} ${alerts.length===1?'stop':'stops'}`;
+      renderAlerts(alerts,driver);
+    }
+
+    function renderAlerts(alerts,selectedDriver){
+      const container=document.getElementById('alertsContainer');
+      if(!alerts.length){
+        container.innerHTML=`<div class="empty"><strong>No complaint stops found${selectedDriver?' for this driver':''}.</strong>The route was checked against the complaint address database.</div>`;
+        return;
       }
 
-      if (!recent.length) {
-        document.getElementById('recentContainer').innerHTML = `
-          <div class="empty">
-            <strong>Your complaint database is empty.</strong>
-            Tap the + button to add the first address.
-          </div>`;
-      } else {
-        document.getElementById('recentContainer').innerHTML = `
-          <div class="recent-list">
-            ${recent.map(r => `
-              <div class="recent-item">
-                <div class="recent-address">${escapeHtml(r.address || '')}</div>
-                <div class="recent-details">${escapeHtml(r.details || '')}</div>
-                <div class="recent-date">${escapeHtml(r.date || '')}</div>
+      const groups={};
+      alerts.forEach(a=>{(groups[a.driver]||(groups[a.driver]=[])).push(a)});
+      container.innerHTML=Object.keys(groups).map(driver=>`
+        <div class="driver-group">
+          <div class="driver-name">${escapeHtml(driver)}</div>
+          <div class="alert-list">
+            ${groups[driver].map(a=>`
+              <div class="alert">
+                <div class="stop-row">
+                  <span class="stop">STOP ${escapeHtml(a.stop)}</span>
+                  <div class="address">${escapeHtml(a.address)}</div>
+                </div>
+                <div class="details">${escapeHtml(a.details)}</div>
               </div>`).join('')}
-          </div>`;
-      }
+          </div>
+        </div>`).join('');
     }
 
-    function openForm() {
-      document.getElementById('overlay').classList.add('show');
-      setTimeout(() => document.getElementById('address').focus(), 150);
-    }
+    function openForm(){document.getElementById('overlay').classList.add('show');setTimeout(()=>document.getElementById('address').focus(),120)}
+    function closeForm(){document.getElementById('overlay').classList.remove('show')}
+    function overlayClick(e){if(e.target.id==='overlay')closeForm()}
 
-    function closeForm() {
-      document.getElementById('overlay').classList.remove('show');
-    }
+    function saveComplaint(){
+      const address=document.getElementById('address').value.trim();
+      const details=document.getElementById('details').value.trim();
+      const btn=document.getElementById('saveBtn');
+      if(!address)return showToast('Enter the address.',true);
+      if(!details)return showToast('Enter the complaint details.',true);
 
-    function overlayClick(event) {
-      if (event.target.id === 'overlay') closeForm();
-    }
-
-    function saveComplaint() {
-      const address = document.getElementById('address').value.trim();
-      const details = document.getElementById('details').value.trim();
-      const btn = document.getElementById('saveBtn');
-
-      if (!address) {
-        showToast('Enter the address.', true);
-        return;
-      }
-
-      if (!details) {
-        showToast('Enter the complaint details.', true);
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
-
+      btn.disabled=true;btn.textContent='Saving...';
       google.script.run
-        .withSuccessHandler(() => {
-          btn.disabled = false;
-          btn.textContent = 'Save address';
-          document.getElementById('address').value = '';
-          document.getElementById('details').value = '';
-          closeForm();
-          showToast('Address saved.');
-          loadHome();
+        .withSuccessHandler(result=>{
+          btn.disabled=false;btn.textContent='Save address';
+          document.getElementById('address').value='';document.getElementById('details').value='';
+          closeForm();showToast(result&&result.updated?'Complaint address updated.':'Complaint address saved.');loadHome();
         })
-        .withFailureHandler(err => {
-          btn.disabled = false;
-          btn.textContent = 'Save address';
-          showToast(errorMessage(err), true);
-        })
-        .addComplaint({ address, details });
+        .withFailureHandler(err=>{btn.disabled=false;btn.textContent='Save address';showToast(errorMessage(err),true)})
+        .addComplaint({address,details});
     }
 
-    function showToast(message, isError) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = `toast show${isError ? ' error' : ''}`;
-      clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(() => {
-        toast.className = 'toast';
-      }, 2800);
+    function showToast(message,isError){
+      const t=document.getElementById('toast');t.textContent=message;t.className=`toast show${isError?' error':''}`;
+      clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>t.className='toast',2800);
     }
-
-    function errorMessage(err) {
-      if (!err) return 'Something went wrong.';
-      return err.message || String(err);
-    }
-
-    function escapeHtml(value) {
-      return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+    function errorMessage(err){return err?(err.message||String(err)):'Something went wrong.'}
+    function escapeHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
+    function escapeAttr(v){return escapeHtml(v)}
   </script>
 </body>
 </html>
