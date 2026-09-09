@@ -50,24 +50,14 @@ function PREPARE_DATABASE() {
   sh.setColumnWidth(4, 420);
   sh.setColumnWidth(5, 150);
   sh.setColumnWidth(6, 90);
-
   return true;
 }
 
-/**
- * HOME data:
- * 1) Reads active complaint addresses from Complaints.
- * 2) Reads each driver listed in Driver!A2:A.
- * 3) In each driver's sheet, only extracts STOP + ADDRESS from column A.
- * 4) Matches normalized route addresses against the complaint database.
- */
 function getHomeData() {
   PREPARE_DATABASE();
-
   const ss = getSS_();
   const complaints = getActiveComplaints_(ss);
   const complaintMap = new Map();
-
   complaints.forEach(c => complaintMap.set(c.normalizedAddress, c));
 
   const drivers = getDriverNames_(ss);
@@ -77,15 +67,12 @@ function getHomeData() {
     const sh = ss.getSheetByName(driver);
     if (!sh || sh.getLastRow() < 1) return;
 
-    const routeStops = parseDriverRoute_(sh);
-
-    routeStops.forEach(route => {
-      const normalized = normalizeAddress_(route.address);
-      const complaint = complaintMap.get(normalized);
+    parseDriverRoute_(sh).forEach(route => {
+      const complaint = complaintMap.get(normalizeAddress_(route.address));
       if (!complaint) return;
 
       alerts.push({
-        driver: driver,
+        driver,
         stop: route.stop,
         address: route.address,
         details: complaint.details,
@@ -96,31 +83,28 @@ function getHomeData() {
   });
 
   alerts.sort((a, b) => {
-    const driverCompare = a.driver.localeCompare(b.driver);
-    if (driverCompare !== 0) return driverCompare;
-    return Number(a.stop) - Number(b.stop);
+    const d = a.driver.localeCompare(b.driver);
+    return d !== 0 ? d : Number(a.stop) - Number(b.stop);
   });
 
-  const recent = complaints
-    .slice(-8)
-    .reverse()
-    .map(c => ({
+  return {
+    totalComplaints: complaints.length,
+    alerts,
+    recent: complaints.slice(-8).reverse().map(c => ({
       id: c.id,
       address: c.address,
       details: c.details,
       date: c.date
-    }));
-
-  const driversWithAlerts = [...new Set(alerts.map(a => a.driver))];
-
-  return {
-    totalComplaints: complaints.length,
-    alerts: alerts,
-    recent: recent,
-    drivers: drivers,
-    driversWithAlerts: driversWithAlerts,
+    })),
+    drivers,
+    driversWithAlerts: [...new Set(alerts.map(a => a.driver))],
     routeMatchingReady: true
   };
+}
+
+function getComplaints() {
+  PREPARE_DATABASE();
+  return getActiveComplaints_(getSS_()).reverse();
 }
 
 function getActiveComplaints_(ss) {
@@ -152,18 +136,6 @@ function getDriverNames_(ss) {
   )];
 }
 
-/**
- * Route format example in column A:
- * 3
- * 2721 Apache Ave
- * CX143
- * 1/1 delivery Front door...
- * (Planned ...)
- *
- * We ONLY care about the numeric stop and the address immediately after it.
- * Lines such as CX143, delivery details, Planned, pickups and Multi-location stop
- * are ignored.
- */
 function parseDriverRoute_(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
@@ -171,10 +143,9 @@ function parseDriverRoute_(sheet) {
   const lines = sheet.getRange(1, 1, lastRow, 1)
     .getDisplayValues()
     .flat()
-    .map(v => cleanText_(v));
+    .map(cleanText_);
 
   const stops = [];
-
   for (let i = 0; i < lines.length; i++) {
     const current = lines[i];
     if (!/^\d+$/.test(current)) continue;
@@ -185,31 +156,23 @@ function parseDriverRoute_(sheet) {
 
     const address = lines[j];
     if (!looksLikeStreetAddress_(address)) continue;
-
-    stops.push({
-      stop: Number(current),
-      address: address
-    });
+    stops.push({ stop: Number(current), address });
   }
-
   return stops;
 }
 
 function looksLikeStreetAddress_(value) {
   const s = cleanText_(value);
-  if (!s) return false;
-
-  // Daily route addresses begin with a street number. This avoids treating
-  // route metadata such as "pickups", "CX143", "Planned..." as addresses.
-  return /^\d+[A-Z0-9-]*\s+.+/i.test(s);
+  return !!s && /^\d+[A-Z0-9-]*\s+.+/i.test(s);
 }
 
 function addComplaint(payload) {
   PREPARE_DATABASE();
-
   payload = payload || {};
+
   const address = cleanText_(payload.address);
   const details = cleanText_(payload.details);
+  const duplicateAction = cleanText_(payload.duplicateAction).toLowerCase();
 
   if (!address) throw new Error('La dirección es obligatoria.');
   if (!details) throw new Error('Escribe el detalle del complaint.');
@@ -219,54 +182,144 @@ function addComplaint(payload) {
 
   const ss = getSS_();
   const sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
-  const now = new Date();
+  const existing = findComplaintByNormalized_(sh, normalized);
 
-  // Keep one active database record per normalized address.
-  if (sh.getLastRow() >= 2) {
-    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getDisplayValues();
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (String(rows[i][5]).toUpperCase() === 'FALSE') continue;
-      const existingNormalized = rows[i][2] || normalizeAddress_(rows[i][1]);
-      if (existingNormalized !== normalized) continue;
+  if (existing && !duplicateAction) {
+    return {
+      ok: false,
+      conflict: true,
+      existing: {
+        id: existing.id,
+        address: existing.address,
+        details: existing.details,
+        date: existing.date
+      },
+      incoming: { address, details }
+    };
+  }
 
-      const rowNumber = i + 2;
-      sh.getRange(rowNumber, 2, 1, 5).setValues([[
+  if (existing) {
+    if (duplicateAction === 'cancel') {
+      return { ok: false, cancelled: true };
+    }
+
+    if (duplicateAction === 'overwrite') {
+      sh.deleteRow(existing.rowNumber);
+      const created = appendComplaint_(sh, address, normalized, details);
+      return { ok: true, action: 'overwrite', complaint: created };
+    }
+
+    if (duplicateAction === 'add') {
+      const mergedDetails = [existing.details, details].filter(Boolean).join('\n• ');
+      const finalDetails = existing.details ? '• ' + mergedDetails : details;
+      const now = new Date();
+      sh.getRange(existing.rowNumber, 2, 1, 5).setValues([[
         address,
         normalized,
-        details,
+        finalDetails,
         now,
         true
       ]]);
-      sh.getRange(rowNumber, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
-
+      sh.getRange(existing.rowNumber, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
       return {
         ok: true,
-        updated: true,
+        action: 'add',
         complaint: {
-          id: rows[i][0],
-          address: address,
-          details: details,
+          id: existing.id,
+          address,
+          details: finalDetails,
           date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
         }
       };
     }
+
+    throw new Error('Acción de duplicado no válida.');
   }
 
+  const created = appendComplaint_(sh, address, normalized, details);
+  return { ok: true, action: 'created', complaint: created };
+}
+
+function appendComplaint_(sh, address, normalized, details) {
   const id = Utilities.getUuid();
+  const now = new Date();
   sh.appendRow([id, address, normalized, details, now, true]);
   const row = sh.getLastRow();
   sh.getRange(row, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
 
   return {
-    ok: true,
-    updated: false,
-    complaint: {
-      id: id,
-      address: address,
-      details: details,
-      date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
-    }
+    id,
+    address,
+    details,
+    date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
   };
+}
+
+function updateComplaint(payload) {
+  PREPARE_DATABASE();
+  payload = payload || {};
+  const id = cleanText_(payload.id);
+  const address = cleanText_(payload.address);
+  const details = cleanText_(payload.details);
+
+  if (!id) throw new Error('Falta el ID.');
+  if (!address) throw new Error('La dirección es obligatoria.');
+  if (!details) throw new Error('Las notas son obligatorias.');
+
+  const normalized = normalizeAddress_(address);
+  const sh = getSS_().getSheetByName(CONFIG.COMPLAINTS_SHEET);
+  const row = findComplaintRowById_(sh, id);
+  if (!row) throw new Error('No encontré esa dirección.');
+
+  const other = findComplaintByNormalized_(sh, normalized, id);
+  if (other) throw new Error('Ya existe otra dirección igual en la base de datos.');
+
+  const now = new Date();
+  sh.getRange(row, 2, 1, 5).setValues([[address, normalized, details, now, true]]);
+  sh.getRange(row, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
+
+  return { ok: true };
+}
+
+function deleteComplaint(id) {
+  PREPARE_DATABASE();
+  id = cleanText_(id);
+  if (!id) throw new Error('Falta el ID.');
+
+  const sh = getSS_().getSheetByName(CONFIG.COMPLAINTS_SHEET);
+  const row = findComplaintRowById_(sh, id);
+  if (!row) throw new Error('No encontré esa dirección.');
+
+  sh.deleteRow(row);
+  return { ok: true };
+}
+
+function findComplaintRowById_(sh, id) {
+  if (sh.getLastRow() < 2) return 0;
+  const ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().flat();
+  const index = ids.findIndex(v => cleanText_(v) === id);
+  return index < 0 ? 0 : index + 2;
+}
+
+function findComplaintByNormalized_(sh, normalized, excludeId) {
+  if (sh.getLastRow() < 2) return null;
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getDisplayValues();
+
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][5]).toUpperCase() === 'FALSE') continue;
+    if (excludeId && cleanText_(rows[i][0]) === excludeId) continue;
+    const n = rows[i][2] || normalizeAddress_(rows[i][1]);
+    if (n !== normalized) continue;
+
+    return {
+      rowNumber: i + 2,
+      id: rows[i][0],
+      address: rows[i][1],
+      details: rows[i][3],
+      date: rows[i][4]
+    };
+  }
+  return null;
 }
 
 function normalizeAddress_(value) {
@@ -279,30 +332,15 @@ function normalizeAddress_(value) {
     .trim();
 
   const replacements = [
-    [/\bSTREET\b/g, 'ST'],
-    [/\bAVENUE\b/g, 'AVE'],
-    [/\bBOULEVARD\b/g, 'BLVD'],
-    [/\bROAD\b/g, 'RD'],
-    [/\bDRIVE\b/g, 'DR'],
-    [/\bLANE\b/g, 'LN'],
-    [/\bCOURT\b/g, 'CT'],
-    [/\bCIRCLE\b/g, 'CIR'],
-    [/\bPARKWAY\b/g, 'PKWY'],
-    [/\bHIGHWAY\b/g, 'HWY'],
-    [/\bPLACE\b/g, 'PL'],
-    [/\bTERRACE\b/g, 'TER'],
-    [/\bAPARTMENT\b/g, 'APT'],
-    [/\bSUITE\b/g, 'STE'],
-    [/\bNORTH\b/g, 'N'],
-    [/\bSOUTH\b/g, 'S'],
-    [/\bEAST\b/g, 'E'],
-    [/\bWEST\b/g, 'W']
+    [/\bSTREET\b/g, 'ST'], [/\bAVENUE\b/g, 'AVE'], [/\bBOULEVARD\b/g, 'BLVD'],
+    [/\bROAD\b/g, 'RD'], [/\bDRIVE\b/g, 'DR'], [/\bLANE\b/g, 'LN'],
+    [/\bCOURT\b/g, 'CT'], [/\bCIRCLE\b/g, 'CIR'], [/\bPARKWAY\b/g, 'PKWY'],
+    [/\bHIGHWAY\b/g, 'HWY'], [/\bPLACE\b/g, 'PL'], [/\bTERRACE\b/g, 'TER'],
+    [/\bAPARTMENT\b/g, 'APT'], [/\bSUITE\b/g, 'STE'], [/\bNORTH\b/g, 'N'],
+    [/\bSOUTH\b/g, 'S'], [/\bEAST\b/g, 'E'], [/\bWEST\b/g, 'W']
   ];
 
-  replacements.forEach(([pattern, replacement]) => {
-    s = s.replace(pattern, replacement);
-  });
-
+  replacements.forEach(([pattern, replacement]) => s = s.replace(pattern, replacement));
   return s.replace(/\s+/g, ' ').trim();
 }
 
@@ -327,50 +365,29 @@ function UPDATE_DRIVER() {
 
   const lastRow = shDriver.getLastRow();
   let drivers = [];
-
   if (lastRow >= 2) {
-    drivers = shDriver
-      .getRange(2, 1, lastRow - 1, 1)
-      .getDisplayValues()
-      .flat()
-      .map(v => String(v).trim())
-      .filter(Boolean);
+    drivers = shDriver.getRange(2, 1, lastRow - 1, 1).getDisplayValues().flat().map(v => String(v).trim()).filter(Boolean);
   }
-
   drivers = [...new Set(drivers)];
 
   const invalidos = [];
   const driversValidos = [];
-
   drivers.forEach(nombre => {
-    if (/[\\/\?\*\[\]\:]/.test(nombre) || nombre.length > 100) {
+    if (/[\\/\?\*\[\]\:]/.test(nombre) || nombre.length > 100 || [CONFIG.DRIVER_SHEET, CONFIG.MANAGED_SHEET, CONFIG.COMPLAINTS_SHEET].includes(nombre)) {
       invalidos.push(nombre);
       return;
     }
-
-    if ([CONFIG.DRIVER_SHEET, CONFIG.MANAGED_SHEET, CONFIG.COMPLAINTS_SHEET].includes(nombre)) {
-      invalidos.push(nombre);
-      return;
-    }
-
     driversValidos.push(nombre);
   });
 
   const managedLastRow = shManaged.getLastRow();
   let managedDrivers = [];
-
   if (managedLastRow >= 1) {
-    managedDrivers = shManaged
-      .getRange(1, 1, managedLastRow, 1)
-      .getDisplayValues()
-      .flat()
-      .map(v => String(v).trim())
-      .filter(Boolean);
+    managedDrivers = shManaged.getRange(1, 1, managedLastRow, 1).getDisplayValues().flat().map(v => String(v).trim()).filter(Boolean);
   }
 
   const creados = [];
   const eliminados = [];
-
   driversValidos.forEach(driver => {
     if (!ss.getSheetByName(driver)) {
       ss.insertSheet(driver);
@@ -389,21 +406,13 @@ function UPDATE_DRIVER() {
   });
 
   shManaged.clearContents();
-  if (driversValidos.length) {
-    shManaged
-      .getRange(1, 1, driversValidos.length, 1)
-      .setValues(driversValidos.map(driver => [driver]));
-  }
+  if (driversValidos.length) shManaged.getRange(1, 1, driversValidos.length, 1).setValues(driversValidos.map(driver => [driver]));
   shManaged.hideSheet();
 
   let mensaje = '✅ DRIVERS ACTUALIZADOS\n\n';
-  mensaje += `Drivers activos: ${driversValidos.length}\n`;
-  mensaje += `Hojas creadas: ${creados.length}\n`;
-  mensaje += `Hojas eliminadas: ${eliminados.length}`;
-
+  mensaje += `Drivers activos: ${driversValidos.length}\nHojas creadas: ${creados.length}\nHojas eliminadas: ${eliminados.length}`;
   if (creados.length) mensaje += `\n\n🟢 Creadas:\n${creados.join('\n')}`;
   if (eliminados.length) mensaje += `\n\n🔴 Eliminadas:\n${eliminados.join('\n')}`;
   if (invalidos.length) mensaje += `\n\n⚠️ Nombres no válidos:\n${invalidos.join('\n')}`;
-
   SpreadsheetApp.getUi().alert(mensaje);
 }
