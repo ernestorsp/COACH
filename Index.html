@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #111827;
+      --danger: #b42318;
+      --danger-soft: #fff1f0;
+      --ok: #067647;
+      --shadow: 0 10px 30px rgba(17,24,39,.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .app {
+      max-width: 760px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 18px 16px 100px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: #111827;
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+
+    .title h1 {
+      font-size: 20px;
+      margin: 0;
+      line-height: 1.1;
+    }
+
+    .title p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .refresh {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .stat .value {
+      font-size: 30px;
+      font-weight: 800;
+      margin-top: 8px;
+    }
+
+    .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      background: var(--danger-soft);
+      color: var(--danger);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 9px;
+    }
+
+    .empty {
+      border: 1px dashed #d1d5db;
+      border-radius: 16px;
+      padding: 22px 16px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .empty strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+
+    .recent-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .recent-item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .recent-address {
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    .recent-details {
+      font-size: 13px;
+      line-height: 1.4;
+      color: #374151;
+    }
+
+    .recent-date {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .fab {
+      position: fixed;
+      right: max(20px, calc((100vw - 760px)/2 + 20px));
+      bottom: 24px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      background: #111827;
+      color: white;
+      font-size: 34px;
+      line-height: 1;
+      box-shadow: 0 12px 28px rgba(17,24,39,.28);
+      cursor: pointer;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(17,24,39,.48);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 20;
+    }
+
+    .overlay.show { display: flex; }
+
+    .sheet {
+      width: min(760px, 100%);
+      background: white;
+      border-radius: 24px 24px 0 0;
+      padding: 18px 16px 28px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+
+    .handle {
+      width: 44px;
+      height: 5px;
+      border-radius: 999px;
+      background: #d1d5db;
+      margin: 0 auto 16px;
+    }
+
+    .form-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .form-title h3 { margin: 0; }
+
+    .close {
+      border: none;
+      background: #f3f4f6;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      margin: 0 0 7px;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      padding: 13px 14px;
+      font: inherit;
+      outline: none;
+      background: white;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17,24,39,.08);
+    }
+
+    .field { margin-bottom: 14px; }
+
+    .save {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      background: #111827;
+      color: white;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .save:disabled { opacity: .55; cursor: not-allowed; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 96px;
+      background: #111827;
+      color: white;
+      padding: 11px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+      display: none;
+      z-index: 40;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+
+    .toast.show { display: block; }
+    .toast.error { background: #b42318; }
+
+    .loading {
+      color: var(--muted);
+      text-align: center;
+      padding: 18px;
+    }
+
+    @media (max-width: 520px) {
+      .stats { grid-template-columns: 1fr; }
+      .fab { right: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">C</div>
+        <div class="title">
+          <h1>COACH</h1>
+          <p>Complaint Address Monitor</p>
+        </div>
+      </div>
+      <button class="refresh" onclick="loadHome()" aria-label="Refresh">↻</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="label">Complaint addresses</div>
+        <div class="value" id="totalComplaints">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">Alerts today</div>
+        <div class="value" id="totalAlerts">—</div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>⚠️ Alerts today</h2>
+        <span class="badge" id="alertBadge">0 stops</span>
+      </div>
+      <div id="alertsContainer" class="loading">Loading...</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Recently added</h2>
+      </div>
+      <div id="recentContainer" class="loading">Loading...</div>
+    </section>
+  </main>
+
+  <button class="fab" onclick="openForm()" aria-label="Add complaint address">+</button>
+
+  <div class="overlay" id="overlay" onclick="overlayClick(event)">
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="form-title">
+        <h3>New complaint address</h3>
+        <button class="close" onclick="closeForm()">×</button>
+      </div>
+
+      <div class="field">
+        <label for="address">Address</label>
+        <input id="address" type="text" placeholder="123 Main St, Jacksonville, FL" autocomplete="street-address">
+      </div>
+
+      <div class="field">
+        <label for="details">What should the driver be careful about?</label>
+        <textarea id="details" placeholder="Example: Customer says leave only at front door. Take a clear photo and verify house number."></textarea>
+      </div>
+
+      <button class="save" id="saveBtn" onclick="saveComplaint()">Save address</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', loadHome);
+
+    function loadHome() {
+      document.getElementById('alertsContainer').innerHTML = '<div class="loading">Loading...</div>';
+      document.getElementById('recentContainer').innerHTML = '<div class="loading">Loading...</div>';
+
+      google.script.run
+        .withSuccessHandler(renderHome)
+        .withFailureHandler(err => showToast(errorMessage(err), true))
+        .getHomeData();
+    }
+
+    function renderHome(data) {
+      data = data || {};
+      const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+      const recent = Array.isArray(data.recent) ? data.recent : [];
+
+      document.getElementById('totalComplaints').textContent = data.totalComplaints || 0;
+      document.getElementById('totalAlerts').textContent = alerts.length;
+      document.getElementById('alertBadge').textContent = `${alerts.length} ${alerts.length === 1 ? 'stop' : 'stops'}`;
+
+      if (!alerts.length) {
+        document.getElementById('alertsContainer').innerHTML = `
+          <div class="empty">
+            <strong>No complaint stops loaded yet.</strong>
+            When route matching is added, this area will show only the stops from today's routes that match the complaint database.
+          </div>`;
+      } else {
+        document.getElementById('alertsContainer').innerHTML = alerts.map(a => `
+          <div class="recent-item">
+            <div class="recent-address">STOP ${escapeHtml(a.stop || '')} · ${escapeHtml(a.address || '')}</div>
+            <div class="recent-details">${escapeHtml(a.details || '')}</div>
+          </div>`).join('');
+      }
+
+      if (!recent.length) {
+        document.getElementById('recentContainer').innerHTML = `
+          <div class="empty">
+            <strong>Your complaint database is empty.</strong>
+            Tap the + button to add the first address.
+          </div>`;
+      } else {
+        document.getElementById('recentContainer').innerHTML = `
+          <div class="recent-list">
+            ${recent.map(r => `
+              <div class="recent-item">
+                <div class="recent-address">${escapeHtml(r.address || '')}</div>
+                <div class="recent-details">${escapeHtml(r.details || '')}</div>
+                <div class="recent-date">${escapeHtml(r.date || '')}</div>
+              </div>`).join('')}
+          </div>`;
+      }
+    }
+
+    function openForm() {
+      document.getElementById('overlay').classList.add('show');
+      setTimeout(() => document.getElementById('address').focus(), 150);
+    }
+
+    function closeForm() {
+      document.getElementById('overlay').classList.remove('show');
+    }
+
+    function overlayClick(event) {
+      if (event.target.id === 'overlay') closeForm();
+    }
+
+    function saveComplaint() {
+      const address = document.getElementById('address').value.trim();
+      const details = document.getElementById('details').value.trim();
+      const btn = document.getElementById('saveBtn');
+
+      if (!address) {
+        showToast('Enter the address.', true);
+        return;
+      }
+
+      if (!details) {
+        showToast('Enter the complaint details.', true);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      google.script.run
+        .withSuccessHandler(() => {
+          btn.disabled = false;
+          btn.textContent = 'Save address';
+          document.getElementById('address').value = '';
+          document.getElementById('details').value = '';
+          closeForm();
+          showToast('Address saved.');
+          loadHome();
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = 'Save address';
+          showToast(errorMessage(err), true);
+        })
+        .addComplaint({ address, details });
+    }
+
+    function showToast(message, isError) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast show${isError ? ' error' : ''}`;
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        toast.className = 'toast';
+      }, 2800);
+    }
+
+    function errorMessage(err) {
+      if (!err) return 'Something went wrong.';
+      return err.message || String(err);
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
