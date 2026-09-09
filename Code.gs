@@ -2,7 +2,9 @@ const CONFIG = {
   SPREADSHEET_ID: '11j1cRxIDCZ_mrbfUuZFsVSpg_CisY8R5YmjU2_DT0aM',
   DRIVER_SHEET: 'Driver',
   MANAGED_SHEET: '_DRIVER_MANAGED',
-  COMPLAINTS_SHEET: 'Complaints'
+  COMPLAINTS_SHEET: 'Complaints',
+  DONE_SHEET: '_DONE_STOPS',
+  TIMEZONE: 'America/New_York'
 };
 
 function getSS_() {
@@ -15,6 +17,7 @@ function onOpen() {
     .addItem('🔄 UPDATE DRIVER', 'UPDATE_DRIVER')
     .addSeparator()
     .addItem('🗂️ PREPARE DATABASE', 'PREPARE_DATABASE')
+    .addItem('🕛 ENABLE DAILY CLEANUP', 'SETUP_DAILY_CLEANUP')
     .addToUi();
 }
 
@@ -29,6 +32,7 @@ function doGet() {
 
 function PREPARE_DATABASE() {
   const ss = getSS_();
+
   let sh = ss.getSheetByName(CONFIG.COMPLAINTS_SHEET);
   if (!sh) sh = ss.insertSheet(CONFIG.COMPLAINTS_SHEET);
 
@@ -50,7 +54,23 @@ function PREPARE_DATABASE() {
   sh.setColumnWidth(4, 420);
   sh.setColumnWidth(5, 150);
   sh.setColumnWidth(6, 90);
+
+  prepareDoneSheet_(ss);
   return true;
+}
+
+function prepareDoneSheet_(ss) {
+  let sh = ss.getSheetByName(CONFIG.DONE_SHEET);
+  if (!sh) sh = ss.insertSheet(CONFIG.DONE_SHEET);
+
+  const headers = ['DATE_KEY', 'DRIVER', 'STOP', 'NORMALIZED_ADDRESS', 'ADDRESS', 'DONE_AT'];
+  const current = sh.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+  if (current.join('|') !== headers.join('|')) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  sh.setFrozenRows(1);
+  sh.hideSheet();
+  return sh;
 }
 
 function getHomeData() {
@@ -60,6 +80,8 @@ function getHomeData() {
   const complaintMap = new Map();
   complaints.forEach(c => complaintMap.set(c.normalizedAddress, c));
 
+  const todayKey = getTodayKey_();
+  const doneKeys = getDoneKeys_(ss, todayKey);
   const drivers = getDriverNames_(ss);
   const alerts = [];
 
@@ -68,13 +90,18 @@ function getHomeData() {
     if (!sh || sh.getLastRow() < 1) return;
 
     parseDriverRoute_(sh).forEach(route => {
-      const complaint = complaintMap.get(normalizeAddress_(route.address));
+      const normalizedRoute = normalizeAddress_(route.address);
+      const complaint = complaintMap.get(normalizedRoute);
       if (!complaint) return;
+
+      const doneKey = buildDoneKey_(driver, route.stop, normalizedRoute);
+      if (doneKeys.has(doneKey)) return;
 
       alerts.push({
         driver,
         stop: route.stop,
         address: route.address,
+        normalizedAddress: normalizedRoute,
         details: complaint.details,
         complaintAddress: complaint.address,
         complaintId: complaint.id
@@ -100,6 +127,54 @@ function getHomeData() {
     driversWithAlerts: [...new Set(alerts.map(a => a.driver))],
     routeMatchingReady: true
   };
+}
+
+function markStopDone(payload) {
+  PREPARE_DATABASE();
+  payload = payload || {};
+
+  const driver = cleanText_(payload.driver);
+  const stop = cleanText_(payload.stop);
+  const address = cleanText_(payload.address);
+  const normalized = normalizeAddress_(payload.normalizedAddress || address);
+
+  if (!driver) throw new Error('Falta el driver.');
+  if (!stop) throw new Error('Falta el número de parada.');
+  if (!normalized) throw new Error('Falta la dirección.');
+
+  const ss = getSS_();
+  const sh = prepareDoneSheet_(ss);
+  const todayKey = getTodayKey_();
+  const key = buildDoneKey_(driver, stop, normalized);
+  const existing = getDoneKeys_(ss, todayKey);
+
+  if (!existing.has(key)) {
+    sh.appendRow([todayKey, driver, Number(stop), normalized, address, new Date()]);
+    sh.getRange(sh.getLastRow(), 6).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
+  }
+
+  return { ok: true };
+}
+
+function getDoneKeys_(ss, dateKey) {
+  const sh = prepareDoneSheet_(ss);
+  const lastRow = sh.getLastRow();
+  const keys = new Set();
+  if (lastRow < 2) return keys;
+
+  sh.getRange(2, 1, lastRow - 1, 4).getDisplayValues().forEach(r => {
+    if (cleanText_(r[0]) !== dateKey) return;
+    keys.add(buildDoneKey_(r[1], r[2], r[3]));
+  });
+  return keys;
+}
+
+function buildDoneKey_(driver, stop, normalizedAddress) {
+  return [cleanText_(driver).toUpperCase(), cleanText_(stop), normalizeAddress_(normalizedAddress)].join('|');
+}
+
+function getTodayKey_() {
+  return Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
 }
 
 function getComplaints() {
@@ -199,9 +274,7 @@ function addComplaint(payload) {
   }
 
   if (existing) {
-    if (duplicateAction === 'cancel') {
-      return { ok: false, cancelled: true };
-    }
+    if (duplicateAction === 'cancel') return { ok: false, cancelled: true };
 
     if (duplicateAction === 'overwrite') {
       sh.deleteRow(existing.rowNumber);
@@ -228,7 +301,7 @@ function addComplaint(payload) {
           id: existing.id,
           address,
           details: finalDetails,
-          date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
+          date: Utilities.formatDate(now, CONFIG.TIMEZONE, 'MM/dd/yyyy h:mm a')
         }
       };
     }
@@ -251,7 +324,7 @@ function appendComplaint_(sh, address, normalized, details) {
     id,
     address,
     details,
-    date: Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM/dd/yyyy h:mm a')
+    date: Utilities.formatDate(now, CONFIG.TIMEZONE, 'MM/dd/yyyy h:mm a')
   };
 }
 
@@ -277,7 +350,6 @@ function updateComplaint(payload) {
   const now = new Date();
   sh.getRange(row, 2, 1, 5).setValues([[address, normalized, details, now, true]]);
   sh.getRange(row, 5).setNumberFormat('MM/dd/yyyy h:mm AM/PM');
-
   return { ok: true };
 }
 
@@ -348,6 +420,42 @@ function cleanText_(value) {
   return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
 }
 
+function SETUP_DAILY_CLEANUP() {
+  const functionName = 'DAILY_CLEAR_DRIVER_ROUTES';
+
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === functionName) ScriptApp.deleteTrigger(trigger);
+  });
+
+  ScriptApp.newTrigger(functionName)
+    .timeBased()
+    .atHour(0)
+    .nearMinute(0)
+    .everyDays(1)
+    .inTimezone(CONFIG.TIMEZONE)
+    .create();
+
+  SpreadsheetApp.getUi().alert('✅ Limpieza diaria activada.\n\nLas hojas de los drivers se limpiarán cada día alrededor de las 12:00 AM.');
+}
+
+function DAILY_CLEAR_DRIVER_ROUTES() {
+  const ss = getSS_();
+  const drivers = getDriverNames_(ss);
+
+  drivers.forEach(driver => {
+    const sh = ss.getSheetByName(driver);
+    if (!sh) return;
+    sh.clearContents();
+  });
+
+  const doneSh = prepareDoneSheet_(ss);
+  if (doneSh.getLastRow() >= 2) {
+    doneSh.getRange(2, 1, doneSh.getLastRow() - 1, doneSh.getMaxColumns()).clearContent();
+  }
+
+  return { ok: true, driversCleared: drivers.length };
+}
+
 function UPDATE_DRIVER() {
   const ss = getSS_();
   const shDriver = ss.getSheetByName(CONFIG.DRIVER_SHEET);
@@ -373,7 +481,7 @@ function UPDATE_DRIVER() {
   const invalidos = [];
   const driversValidos = [];
   drivers.forEach(nombre => {
-    if (/[\\/\?\*\[\]\:]/.test(nombre) || nombre.length > 100 || [CONFIG.DRIVER_SHEET, CONFIG.MANAGED_SHEET, CONFIG.COMPLAINTS_SHEET].includes(nombre)) {
+    if (/[\\/\?\*\[\]\:]/.test(nombre) || nombre.length > 100 || [CONFIG.DRIVER_SHEET, CONFIG.MANAGED_SHEET, CONFIG.COMPLAINTS_SHEET, CONFIG.DONE_SHEET].includes(nombre)) {
       invalidos.push(nombre);
       return;
     }
