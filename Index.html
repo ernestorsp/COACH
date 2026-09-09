@@ -14,12 +14,13 @@
     .page{display:none}.page.active{display:block}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}.stat,.section{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.stat{padding:16px}.stat .label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase}.stat .value{font-size:30px;font-weight:900;margin-top:7px}.section{padding:16px;margin-bottom:16px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section h2{font-size:16px;margin:0}.badge{background:var(--warn-bg);color:var(--warn);border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900}
     .filter{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;margin-bottom:12px}
-    .list{display:grid;gap:10px}.card{border:1px solid var(--line);border-radius:15px;padding:13px;background:#fff}.driver{font-size:12px;color:var(--blue);font-weight:900;text-transform:uppercase;margin-bottom:6px}.addr{font-size:15px;font-weight:900}.stop{display:inline-block;margin-right:7px;background:#111827;color:#fff;border-radius:8px;padding:4px 7px;font-size:11px}.details{font-size:13px;line-height:1.45;color:#334155;margin-top:8px;white-space:pre-wrap}.meta{font-size:11px;color:var(--muted);margin-top:8px}.empty{border:1px dashed #cbd5e1;border-radius:15px;padding:22px;text-align:center;color:var(--muted)}
+    .list{display:grid;gap:10px}.card{border:1px solid var(--line);border-radius:15px;padding:13px;background:#fff}.alert-card{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start}.driver{font-size:12px;color:var(--blue);font-weight:900;text-transform:uppercase;margin-bottom:6px}.addr{font-size:15px;font-weight:900}.stop{display:inline-block;margin-right:7px;background:#111827;color:#fff;border-radius:8px;padding:4px 7px;font-size:11px}.details{font-size:13px;line-height:1.45;color:#334155;margin-top:8px;white-space:pre-wrap}.meta{font-size:11px;color:var(--muted);margin-top:8px}.empty{border:1px dashed #cbd5e1;border-radius:15px;padding:22px;text-align:center;color:var(--muted)}
+    .donebtn{width:42px;height:42px;border:none;border-radius:12px;background:#ecfdf3;color:#067647;font-size:19px;cursor:pointer;display:grid;place-items:center}.donebtn:hover{background:#d1fadf}.donebtn:disabled{opacity:.5;cursor:wait}
     .db-toolbar{display:flex;gap:8px;margin-bottom:12px}.db-toolbar input{flex:1;border:1px solid var(--line);border-radius:12px;padding:11px 12px}.actions{display:flex;gap:8px;margin-top:12px}.smallbtn{border:none;border-radius:10px;padding:8px 11px;font-weight:800;cursor:pointer}.editbtn{background:#eef2ff;color:#3730a3}.deletebtn{background:#fff1f2;color:#be123c}
     .fab{position:fixed;right:max(20px,calc((100vw - 820px)/2 + 20px));bottom:78px;width:58px;height:58px;border-radius:50%;border:none;background:var(--dark);color:#fff;font-size:32px;box-shadow:0 14px 28px rgba(15,23,42,.26);cursor:pointer;z-index:8}
     .bottomnav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(820px,100%);height:64px;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;z-index:7}.navbtn{border:none;background:#fff;color:var(--muted);font-weight:800;cursor:pointer}.navbtn.active{color:var(--dark)}
     .overlay{position:fixed;inset:0;background:rgba(15,23,42,.48);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.show{display:flex}.sheet{width:min(820px,100%);background:#fff;border-radius:24px 24px 0 0;padding:18px 16px 28px;max-height:92vh;overflow:auto}.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.modal-head h3{margin:0}.close{width:36px;height:36px;border:none;border-radius:50%;background:#f1f5f9;cursor:pointer}.field{margin-bottom:14px}.field label{display:block;font-size:12px;font-weight:900;margin-bottom:7px}.field input,.field textarea{width:100%;border:1px solid #cbd5e1;border-radius:13px;padding:12px 13px;outline:none}.field textarea{min-height:125px;resize:vertical}.primary{width:100%;border:none;border-radius:13px;padding:13px;background:var(--dark);color:#fff;font-weight:900;cursor:pointer}.primary:disabled{opacity:.55}.conflictbox{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:13px;margin-bottom:14px}.conflictbox strong{display:block;margin-bottom:6px}.conflict-actions{display:grid;gap:8px}.conflict-actions button{border:none;border-radius:12px;padding:12px;font-weight:900;cursor:pointer}.overwrite{background:#fee2e2;color:#991b1b}.append{background:#dcfce7;color:#166534}.cancel{background:#e2e8f0;color:#334155}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;background:#111827;color:#fff;border-radius:12px;padding:11px 14px;display:none;z-index:40;max-width:calc(100vw - 32px);text-align:center}.toast.show{display:block}.toast.error{background:#b42318}
-    @media(max-width:520px){.stats{grid-template-columns:1fr}.fab{right:20px}.actions{flex-wrap:wrap}}
+    @media(max-width:520px){.stats{grid-template-columns:1fr}.fab{right:20px}.actions{flex-wrap:wrap}.alert-card{grid-template-columns:1fr auto}}
   </style>
 </head>
 <body>
@@ -32,10 +33,10 @@
     <section id="homePage" class="page active">
       <div class="stats">
         <div class="stat"><div class="label">Complaint addresses</div><div class="value" id="totalComplaints">—</div></div>
-        <div class="stat"><div class="label">Alerts today</div><div class="value" id="totalAlerts">—</div></div>
+        <div class="stat"><div class="label">Pending stops</div><div class="value" id="totalAlerts">—</div></div>
       </div>
       <div class="section">
-        <div class="section-head"><h2>⚠️ Alerts today</h2><span class="badge" id="alertBadge">0 stops</span></div>
+        <div class="section-head"><h2>⚠️ Pending stops</h2><span class="badge" id="alertBadge">0 stops</span></div>
         <select class="filter" id="driverFilter" onchange="renderAlerts()"><option value="">All drivers</option></select>
         <div id="alertsContainer" class="empty">Loading...</div>
       </div>
@@ -132,8 +133,34 @@
       document.getElementById('totalAlerts').textContent=(homeData.alerts||[]).length;
       document.getElementById('alertBadge').textContent=`${alerts.length} ${alerts.length===1?'stop':'stops'}`;
       const box=document.getElementById('alertsContainer');
-      if(!alerts.length){box.className='empty';box.innerHTML='<strong>No complaint stops found.</strong><br>Only route addresses that match the database appear here.';return;}
-      box.className='list';box.innerHTML=alerts.map(a=>`<div class="card"><div class="driver">${esc(a.driver)}</div><div class="addr"><span class="stop">STOP ${esc(a.stop)}</span>${esc(a.address)}</div><div class="details">${esc(a.details)}</div></div>`).join('');
+      if(!alerts.length){box.className='empty';box.innerHTML='<strong>No pending complaint stops.</strong><br>Completed stops disappear from this list.';return;}
+      box.className='list';
+      box.innerHTML=alerts.map((a,i)=>`
+        <div class="card alert-card">
+          <div>
+            <div class="driver">${esc(a.driver)}</div>
+            <div class="addr"><span class="stop">STOP ${esc(a.stop)}</span>${esc(a.address)}</div>
+            <div class="details">${esc(a.details)}</div>
+          </div>
+          <button class="donebtn" id="done_${i}" onclick="markDone(${i}, this)" title="Driver completed this stop" aria-label="Mark stop done">🗑️</button>
+        </div>`).join('');
+      window.__visibleAlerts=alerts;
+    }
+
+    function markDone(index,btn){
+      const a=(window.__visibleAlerts||[])[index];
+      if(!a)return;
+      if(!confirm(`Mark this stop as completed?\n\n${a.driver}\nSTOP ${a.stop} — ${a.address}`))return;
+      btn.disabled=true;
+      google.script.run.withSuccessHandler(()=>{
+        showToast('Stop completed.');
+        loadHome();
+      }).withFailureHandler(err=>{btn.disabled=false;showToast(errorMessage(err),true);}).markStopDone({
+        driver:a.driver,
+        stop:a.stop,
+        address:a.address,
+        normalizedAddress:a.normalizedAddress||''
+      });
     }
 
     function renderRecent(){
