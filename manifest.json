@@ -1,0 +1,25 @@
+{
+  "name": "COACH - Complaint Address Monitor",
+  "short_name": "COACH",
+  "description": "Complaint address and route monitor for delivery drivers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef5fb",
+  "theme_color": "#087ee5",
+  "icons": [
+    {
+      "src": "coach-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "coach-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}
