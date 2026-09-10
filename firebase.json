@@ -6,6 +6,7 @@
       "firestore.rules",
       "firestore.indexes.json",
       ".firebaserc",
+      "functions/**",
       "**/.*",
       "**/node_modules/**",
       "Code.gs",
@@ -18,5 +19,8 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions"
   }
 }
