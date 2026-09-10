@@ -7,31 +7,50 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasUser() {
+      return signedIn() && exists(userPath());
+    }
+
+    function isActive() {
+      return hasUser() && get(userPath()).data.status == 'active';
+    }
+
     function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isActive() && get(userPath()).data.role == 'admin';
     }
 
     match /users/{uid} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == uid
+          && resource.data.status == 'invited'
+          && request.resource.data.status == 'active'
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.uid == resource.data.uid);
+      allow delete: if isAdmin();
     }
 
     match /drivers/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if isActive();
     }
 
     match /routes/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if isActive();
     }
 
     match /complaints/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if isActive();
     }
 
     match /doneStops/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if isActive();
     }
 
     match /{document=**} {
