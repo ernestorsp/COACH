@@ -1,7 +1,6 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
-const crypto = require('crypto');
 
 admin.initializeApp();
 setGlobalOptions({ region: 'us-east1', maxInstances: 10 });
@@ -19,14 +18,8 @@ async function requireAdmin(req) {
   if (!header.startsWith('Bearer ')) throw new Error('unauthenticated');
   const decoded = await admin.auth().verifyIdToken(header.slice(7));
   const snap = await db.doc(`users/${decoded.uid}`).get();
-  if (!snap.exists || snap.data().role !== 'admin' || snap.data().status !== 'active') {
-    throw new Error('permission-denied');
-  }
+  if (!snap.exists || snap.data().role !== 'admin' || snap.data().status !== 'active') throw new Error('permission-denied');
   return decoded;
-}
-
-function makeTempPassword() {
-  return `Coach!${crypto.randomBytes(12).toString('base64url')}A9`;
 }
 
 exports.adminUser = onRequest(async (req, res) => {
@@ -38,30 +31,23 @@ exports.adminUser = onRequest(async (req, res) => {
     const caller = await requireAdmin(req);
     const action = String(req.body?.action || '');
 
-    if (action === 'invite') {
+    if (action === 'create' || action === 'invite') {
       const email = String(req.body?.email || '').trim().toLowerCase();
       const name = String(req.body?.name || '').trim() || email;
       const role = req.body?.role === 'admin' ? 'admin' : 'user';
+      const password = String(req.body?.password || '');
       if (!email) return res.status(400).json({ error: 'email-required' });
+      if (password.length < 8) return res.status(400).json({ error: 'password-must-have-8-characters' });
 
-      const tempPassword = makeTempPassword();
       let userRecord;
       let reused = false;
-
       try {
         userRecord = await admin.auth().getUserByEmail(email);
         reused = true;
-        userRecord = await admin.auth().updateUser(userRecord.uid, {
-          password: tempPassword,
-          disabled: false
-        });
+        userRecord = await admin.auth().updateUser(userRecord.uid, { password, disabled: false, displayName: name });
       } catch (err) {
         if (err.code !== 'auth/user-not-found') throw err;
-        userRecord = await admin.auth().createUser({
-          email,
-          password: tempPassword,
-          disabled: false
-        });
+        userRecord = await admin.auth().createUser({ email, password, disabled: false, displayName: name });
       }
 
       await db.doc(`users/${userRecord.uid}`).set({
@@ -69,35 +55,21 @@ exports.adminUser = onRequest(async (req, res) => {
         name,
         email,
         role,
-        status: 'invited',
-        mustChangePassword: true,
-        invitedBy: caller.uid,
-        invitedAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'active',
+        mustChangePassword: false,
+        createdBy: caller.uid,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
       await admin.auth().revokeRefreshTokens(userRecord.uid);
-
-      return res.json({
-        ok: true,
-        uid: userRecord.uid,
-        email,
-        tempPassword,
-        reused
-      });
+      return res.json({ ok: true, uid: userRecord.uid, email, reused });
     }
 
     if (action === 'delete') {
       const uid = String(req.body?.uid || '').trim();
       if (!uid) return res.status(400).json({ error: 'uid-required' });
       if (uid === caller.uid) return res.status(400).json({ error: 'cannot-delete-self' });
-
-      try {
-        await admin.auth().deleteUser(uid);
-      } catch (err) {
-        if (err.code !== 'auth/user-not-found') throw err;
-      }
-
+      try { await admin.auth().deleteUser(uid); } catch (err) { if (err.code !== 'auth/user-not-found') throw err; }
       await db.doc(`users/${uid}`).delete().catch(() => {});
       return res.json({ ok: true });
     }
