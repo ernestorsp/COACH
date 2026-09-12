@@ -1,10 +1,144 @@
-import{addressKey,formatDate,label,store,recent,initAnalytics,addAttempt,finishAttempt}from'./analytics-core.js';
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));let db=null,pending=null,timer=0;
-function dataFor(address){const k=addressKey(address),ev=recent(store.events).filter(x=>x.addressKey===k).sort((a,b)=>(b.createdMs||0)-(a.createdMs||0)),rh=recent(store.hits).filter(x=>x.addressKey===k).sort((a,b)=>(b.createdMs||0)-(a.createdMs||0)),m=new Map;for(const h of rh){const id=h.driverId||h.driverName||'x';if(!m.has(id))m.set(id,{name:h.driverName||'Unknown driver',count:0,rows:[]});const g=m.get(id);g.count++;g.rows.push(h)}return{ev,rh,drivers:[...m.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name))}}
-function modal(){if(document.getElementById('historyDetailsModal'))return;const x=document.createElement('div');x.className='overlay';x.id='historyDetailsModal';x.innerHTML='<div class="sheet"><div class="row between"><div><h3 style="margin:0">Address details</h3><div class="muted" id="historyAddress" style="margin-top:5px"></div></div><button class="btn soft" id="closeHistoryDetails">✕</button></div><div id="historyDetailsBody" style="margin-top:14px"></div></div>';document.body.appendChild(x);document.getElementById('closeHistoryDetails').onclick=()=>x.classList.remove('on');x.onclick=e=>{if(e.target===x)x.classList.remove('on')}}
-function openDetails(id){modal();const c=store.complaints.find(x=>x.id===id);if(!c)return;const a=dataFor(c.address),re=a.drivers.filter(d=>d.count>=2);document.getElementById('historyAddress').textContent=c.address||'';const drivers=a.drivers.length?a.drivers.map(d=>`<div class="item" style="margin-bottom:8px"><div class="row between"><b>${esc(d.name)}</b><span class="pill">${d.count} time${d.count===1?'':'s'}</span></div>${d.count>=2?'<div style="margin-top:6px;color:#b45309;font-weight:850;font-size:12px">⚠ Recurring driver at this address</div>':''}<div class="muted" style="margin-top:6px">${d.rows.map(r=>`${esc(r.dateKey||'')}${r.stop!==''?` · Stop ${esc(r.stop)}`:''}`).join('<br>')}</div></div>`).join(''):'<div class="empty">No driver route appearances recorded yet.</div>';const events=a.ev.length?a.ev.map(e=>`<div class="item" style="margin-bottom:8px"><div class="row between"><b>${esc(label(e.action))}</b><span class="muted">${esc(formatDate(e.createdMs))}</span></div>${e.notes?`<div class="notes">${esc(e.notes)}</div>`:''}</div>`).join(''):'<div class="empty">No additions recorded in the last 3 months.</div>';document.getElementById('historyDetailsBody').innerHTML=`<div class="stats" style="margin-bottom:14px"><div class="card stat" style="margin:0"><span class="label">Times added · 3 months</span><b>${a.ev.length}</b></div><div class="card stat" style="margin:0"><span class="label">Route appearances</span><b>${a.rh.length}</b></div><div class="card stat" style="margin:0"><span class="label">Recurring drivers</span><b>${re.length}</b></div></div><h3 style="margin:16px 0 9px">Driver recurrence</h3>${drivers}<h3 style="margin:18px 0 9px">Address history</h3>${events}`;document.getElementById('historyDetailsModal').classList.add('on')}
-function decorate(){const list=document.getElementById('complaintsList');if(!list)return;for(const edit of list.querySelectorAll('[data-complaint]')){const id=edit.dataset.complaint,c=store.complaints.find(x=>x.id===id),item=edit.closest('.item');if(!c||!item)continue;item.querySelectorAll('[data-analytics-added]').forEach(x=>x.remove());const a=dataFor(c.address),top=a.drivers.find(d=>d.count>=2),box=document.createElement('div');box.dataset.analyticsAdded='1';box.style.cssText='display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end';box.innerHTML=`<span class="pill" title="Times added in the last 3 months">×${a.ev.length}</span>${top?`<span class="pill" style="background:#fff4e5;color:#9a5a00">⚠ ${esc(top.name)} ×${top.count}</span>`:''}<button class="btn soft" data-history-details="${esc(id)}">Details</button>`;edit.parentElement?.insertBefore(box,edit)}list.querySelectorAll('[data-history-details]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openDetails(b.dataset.historyDetails)})}
-function changed(){clearTimeout(timer);timer=setTimeout(decorate,120)}
-async function record(){const id=document.getElementById('complaintId')?.value||'';if(id||!db)return;const address=document.getElementById('complaintAddress')?.value?.trim()||'',notes=document.getElementById('complaintNotes')?.value?.trim()||'';if(!address||!notes)return;const k=addressKey(address);if(!k)return;const ex=store.complaints.find(c=>addressKey(c.address)===k);const p=addAttempt(db,address,notes,ex);pending=ex?p:null;await p}
-function listeners(){modal();document.addEventListener('click',e=>{if(e.target.closest?.('#saveComplaintBtn'))record().catch(()=>{});const d=e.target.closest?.('[data-dup]');if(d&&pending){const p=pending;pending=null;Promise.resolve(p).then(r=>finishAttempt(r,d.dataset.dup)).catch(()=>{})}},true);const list=document.getElementById('complaintsList');if(list)new MutationObserver(changed).observe(list,{childList:true,subtree:true})}
-listeners();db=await initAnalytics(changed);changed();
+import{addressKey,formatDate,label,store,initAnalytics,addAttempt,finishAttempt}from'./analytics-core.js';
+
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+let db=null,pending=null,timer=0,selectedWeek='';
+
+function etDateParts(date=new Date()){
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const o={};for(const x of p)if(x.type!=='literal')o[x.type]=Number(x.value);
+  return{year:o.year,month:o.month,day:o.day};
+}
+function utcDate(y,m,d){return new Date(Date.UTC(y,m-1,d,12));}
+function ymd(d){return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;}
+function addDays(d,n){const x=new Date(d);x.setUTCDate(x.getUTCDate()+n);return x;}
+function isoWeek(d){
+  const x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));
+  const day=x.getUTCDay()||7;x.setUTCDate(x.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(x.getUTCFullYear(),0,1));
+  return Math.ceil((((x-y)/86400000)+1)/7);
+}
+function sundayFor(date=new Date()){
+  const p=etDateParts(date),x=utcDate(p.year,p.month,p.day);
+  return addDays(x,-x.getUTCDay());
+}
+function weekObject(start){
+  const end=addDays(start,6),w=isoWeek(end);
+  const fmt=d=>new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(d);
+  return{key:ymd(start),start:ymd(start),end:ymd(end),number:w,label:`W${w} · ${fmt(start)}–${fmt(end)}`};
+}
+function weeks(){
+  const current=sundayFor();
+  return Array.from({length:14},(_,i)=>weekObject(addDays(current,-7*i)));
+}
+function previousWeekKey(){return weeks()[1]?.key||weeks()[0]?.key||'';}
+function dateKeyFromMs(ms){
+  if(!ms)return'';
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Number(ms)));
+}
+function chosenWeek(){return weeks().find(w=>w.key===selectedWeek)||weeks()[1]||weeks()[0];}
+function inWeek(row,w=chosenWeek()){
+  const d=row.dateKey||dateKeyFromMs(row.createdMs);
+  return !!d&&d>=w.start&&d<=w.end;
+}
+function dateOnly(s){
+  if(!s)return'Date unavailable';
+  const [y,m,d]=String(s).split('-').map(Number);
+  if(!y||!m||!d)return esc(s);
+  return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(utcDate(y,m,d));
+}
+
+function dataFor(address){
+  const k=addressKey(address),w=chosenWeek();
+  const ev=store.events.filter(x=>x.addressKey===k&&inWeek(x,w)).sort((a,b)=>(b.createdMs||0)-(a.createdMs||0));
+  const rh=store.hits.filter(x=>x.addressKey===k&&inWeek(x,w)).sort((a,b)=>String(b.dateKey||'').localeCompare(String(a.dateKey||''))||(b.createdMs||0)-(a.createdMs||0));
+  const m=new Map;
+  for(const h of rh){
+    const id=h.driverId||h.driverName||'x';
+    if(!m.has(id))m.set(id,{name:h.driverName||'Unknown driver',count:0,rows:[]});
+    const g=m.get(id);g.count++;g.rows.push(h);
+  }
+  return{ev,rh,drivers:[...m.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)),week:w};
+}
+
+function ensureWeekSelector(){
+  const database=document.getElementById('database');if(!database)return;
+  let sel=document.getElementById('analyticsWeek');
+  if(!sel){
+    const search=document.getElementById('dbSearch');
+    const host=search?.closest('.field');if(!host)return;
+    const wrap=document.createElement('div');wrap.className='field';wrap.id='analyticsWeekWrap';
+    wrap.innerHTML='<label>Week</label><select id="analyticsWeek"></select><div class="muted" id="analyticsWeekHelp" style="margin-top:6px">Counts and details for the selected Sunday–Saturday week. History is retained for the last 3 months.</div>';
+    host.insertAdjacentElement('afterend',wrap);sel=wrap.querySelector('select');
+  }
+  const opts=weeks();
+  if(!selectedWeek)selectedWeek=previousWeekKey();
+  sel.innerHTML=opts.map(w=>`<option value="${w.key}">${esc(w.label)}</option>`).join('');
+  if(opts.some(w=>w.key===selectedWeek))sel.value=selectedWeek;else{selectedWeek=previousWeekKey();sel.value=selectedWeek;}
+  if(!sel.dataset.bound){sel.dataset.bound='1';sel.addEventListener('change',()=>{selectedWeek=sel.value;decorate();});}
+}
+
+function modal(){
+  if(document.getElementById('historyDetailsModal'))return;
+  const x=document.createElement('div');x.className='overlay';x.id='historyDetailsModal';
+  x.innerHTML='<div class="sheet"><div class="row between"><div><h3 style="margin:0">Address details</h3><div class="muted" id="historyAddress" style="margin-top:5px"></div><div class="muted" id="historyWeek" style="margin-top:3px"></div></div><button class="btn soft" id="closeHistoryDetails">✕</button></div><div id="historyDetailsBody" style="margin-top:14px"></div></div>';
+  document.body.appendChild(x);
+  document.getElementById('closeHistoryDetails').onclick=()=>x.classList.remove('on');
+  x.onclick=e=>{if(e.target===x)x.classList.remove('on');};
+}
+
+function openDetails(id){
+  modal();
+  const c=store.complaints.find(x=>x.id===id);if(!c)return;
+  const a=dataFor(c.address),re=a.drivers.filter(d=>d.count>=2);
+  document.getElementById('historyAddress').textContent=c.address||'';
+  document.getElementById('historyWeek').textContent=a.week?.label||'';
+
+  const drivers=a.drivers.length?a.drivers.map(d=>`<div class="item" style="margin-bottom:8px"><div class="row between"><b>${esc(d.name)}</b><span class="pill">${d.count} time${d.count===1?'':'s'}</span></div>${d.count>=2?'<div style="margin-top:6px;color:#b45309;font-weight:850;font-size:12px">⚠ Recurring driver at this address</div>':''}<div style="margin-top:8px">${d.rows.map(r=>`<div class="muted" style="padding:4px 0"><b style="color:#334155">${esc(dateOnly(r.dateKey))}</b>${r.stop!==''?` · Stop ${esc(r.stop)}`:''}</div>`).join('')}</div></div>`).join(''):'<div class="empty">No driver route appearances recorded for this week.</div>';
+
+  const events=a.ev.length?a.ev.map(e=>`<div class="item" style="margin-bottom:8px"><div class="row between"><b>${esc(label(e.action))}</b><span class="muted">${esc(formatDate(e.createdMs))}</span></div>${e.notes?`<div class="notes">${esc(e.notes)}</div>`:''}</div>`).join(''):'<div class="empty">This address was not entered during the selected week.</div>';
+
+  document.getElementById('historyDetailsBody').innerHTML=`<div class="stats" style="margin-bottom:14px"><div class="card stat" style="margin:0"><span class="label">Times entered · ${esc('W'+a.week.number)}</span><b>${a.ev.length}</b></div><div class="card stat" style="margin:0"><span class="label">Driver route appearances</span><b>${a.rh.length}</b></div><div class="card stat" style="margin:0"><span class="label">Recurring drivers</span><b>${re.length}</b></div></div><h3 style="margin:16px 0 9px">Driver route history</h3>${drivers}<h3 style="margin:18px 0 9px">Address entry history</h3>${events}`;
+  document.getElementById('historyDetailsModal').classList.add('on');
+}
+
+function decorate(){
+  ensureWeekSelector();
+  const list=document.getElementById('complaintsList');if(!list)return;
+  for(const edit of list.querySelectorAll('[data-complaint]')){
+    const id=edit.dataset.complaint,c=store.complaints.find(x=>x.id===id),item=edit.closest('.item');if(!c||!item)continue;
+    const a=dataFor(c.address),top=a.drivers.find(d=>d.count>=2),sig=[selectedWeek,a.ev.length,a.rh.length,top?.name||'',top?.count||0].join('|');
+    let box=item.querySelector(`[data-analytics-box="${CSS.escape(id)}"]`);
+    if(!box){box=document.createElement('div');box.dataset.analyticsBox=id;box.style.cssText='display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end';edit.parentElement?.insertBefore(box,edit);}
+    if(box.dataset.sig!==sig){
+      box.dataset.sig=sig;
+      box.innerHTML=`<span class="pill" title="Times entered in ${esc(a.week.label)}">×${a.ev.length}</span>${top?`<span class="pill" style="background:#fff4e5;color:#9a5a00">⚠ ${esc(top.name)} ×${top.count}</span>`:''}<button class="btn soft" type="button" data-history-details="${esc(id)}">Details</button>`;
+    }
+  }
+}
+function changed(){clearTimeout(timer);timer=setTimeout(decorate,100);}
+
+async function record(){
+  const id=document.getElementById('complaintId')?.value||'';if(id||!db)return;
+  const address=document.getElementById('complaintAddress')?.value?.trim()||'',notes=document.getElementById('complaintNotes')?.value?.trim()||'';
+  if(!address||!notes)return;const k=addressKey(address);if(!k)return;
+  const ex=store.complaints.find(c=>addressKey(c.address)===k);
+  const p=addAttempt(db,address,notes,ex);pending=ex?p:null;await p;
+}
+
+function listeners(){
+  modal();ensureWeekSelector();
+  document.addEventListener('click',e=>{
+    const details=e.target.closest?.('[data-history-details]');
+    if(details){e.preventDefault();e.stopPropagation();openDetails(details.dataset.historyDetails);return;}
+    if(e.target.closest?.('#saveComplaintBtn'))record().catch(()=>{});
+    const d=e.target.closest?.('[data-dup]');
+    if(d&&pending){const p=pending;pending=null;Promise.resolve(p).then(r=>finishAttempt(r,d.dataset.dup)).catch(()=>{});}
+  },true);
+  const list=document.getElementById('complaintsList');
+  if(list)new MutationObserver(()=>changed()).observe(list,{childList:true,subtree:true});
+}
+
+listeners();
+db=await initAnalytics(changed);
+if(!selectedWeek)selectedWeek=previousWeekKey();
+changed();
