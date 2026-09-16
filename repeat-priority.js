@@ -1,12 +1,19 @@
 import{addressKey,store,recent}from'./analytics-core.js';
 
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[m]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 let timer=0;
+const ud=(y,m,d)=>new Date(Date.UTC(y,m-1,d,12));
+function isoWeek(d){const x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())),q=x.getUTCDay()||7;x.setUTCDate(x.getUTCDate()+4-q);const y=new Date(Date.UTC(x.getUTCFullYear(),0,1));return Math.ceil((((x-y)/86400000)+1)/7)}
+function eventWeek(e){let k=e.assignedWeekStart||e.dateKey||'';const p=String(k).split('-').map(Number);if(!p[0]||!p[1]||!p[2])return null;let d=ud(p[0],p[1],p[2]);if(!e.assignedWeekStart)d=new Date(d.getTime()-d.getUTCDay()*86400000);const end=new Date(d.getTime()+6*86400000);return isoWeek(end)}
 
 function statsFor(address){
   const k=addressKey(address);
-  if(!k)return{count:0,drivers:[]};
-  const count=recent(store.events).filter(e=>e.addressKey===k).length;
+  if(!k)return{count:0,drivers:[],weeks:[]};
+  const events=recent(store.events).filter(e=>e.addressKey===k);
+  const count=events.length;
+  const wm=new Map();
+  for(const e of events){const w=eventWeek(e);if(w)wm.set(w,(wm.get(w)||0)+1)}
+  const weeks=[...wm.entries()].sort((a,b)=>b[0]-a[0]);
   const hits=recent(store.hits).filter(h=>h.addressKey===k);
   const dm=new Map();
   for(const h of hits){
@@ -15,7 +22,7 @@ function statsFor(address){
     dm.set(name,(dm.get(name)||0)+1);
   }
   const drivers=[...dm.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-  return{count,drivers};
+  return{count,drivers,weeks};
 }
 
 function complaintForAddress(address){
@@ -54,7 +61,8 @@ function decoratePending(){
     let box=item.querySelector('[data-repeat-home]');
     if(!box){box=document.createElement('div');box.dataset.repeatHome='1';box.style.cssText='margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap';item.appendChild(box)}
     const driverText=s.drivers.length?s.drivers.map(([n,nc])=>`${esc(n)} ×${nc}`).join(' · '):'No previous drivers recorded';
-    box.innerHTML=`<span class="pill">Entered ×${s.count}</span><span class="muted" style="font-weight:800">Drivers: ${driverText}</span>`;
+    const weekText=s.weeks.length?s.weeks.map(([w,n])=>`W${w}×${n}`).join(' · '):'';
+    box.innerHTML=`<span class="pill">Entered ×${s.count}</span>${weekText?`<span class="muted" style="font-weight:800">${weekText}</span>`:''}<span class="muted" style="font-weight:800">Drivers: ${driverText}</span>`;
     rows.push({item,count:s.count,address:c.address||''});
   }
   rows.sort((a,b)=>b.count-a.count||a.address.localeCompare(b.address));
@@ -70,7 +78,8 @@ function renderMostRepeated(){
   const rows=store.complaints.map(c=>({c,s:statsFor(c.address)})).filter(x=>x.s.count>0).sort((a,b)=>b.s.count-a.s.count||(a.c.address||'').localeCompare(b.c.address||''));
   list.innerHTML=rows.length?rows.map(({c,s})=>{
     const drivers=s.drivers.length?s.drivers.map(([name,count])=>`${esc(name)} ×${count}`).join(' · '):'No driver route appearances yet';
-    return `<div class="item"><div class="row between"><div><div class="addr">${esc(c.address||'')}</div>${c.notes?`<div class="notes">${esc(c.notes)}</div>`:''}</div><span class="pill">×${s.count}</span></div><div class="muted" style="margin-top:8px;font-weight:800">Drivers: ${drivers}</div></div>`;
+    const weeks=s.weeks.length?s.weeks.map(([w,n])=>`<span class="pill">W${w}×${n}</span>`).join(' '):'';
+    return `<div class="item"><div class="row between"><div><div class="addr">${esc(c.address||'')}</div>${c.notes?`<div class="notes">${esc(c.notes)}</div>`:''}</div><span class="pill">×${s.count}</span></div>${weeks?`<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${weeks}</div>`:''}<div class="muted" style="margin-top:8px;font-weight:800">Drivers: ${drivers}</div></div>`;
   }).join(''):'<div class="empty">No repeated-address history recorded yet.</div>';
 }
 
