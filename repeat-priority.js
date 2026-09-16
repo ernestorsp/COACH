@@ -4,6 +4,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 let timer=0;
 const ud=(y,m,d)=>new Date(Date.UTC(y,m-1,d,12));
 function isoWeek(d){const x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())),q=x.getUTCDay()||7;x.setUTCDate(x.getUTCDate()+4-q);const y=new Date(Date.UTC(x.getUTCFullYear(),0,1));return Math.ceil((((x-y)/86400000)+1)/7)}
+function previousWeek(){const d=new Date();const u=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),12));u.setUTCDate(u.getUTCDate()-7);return isoWeek(u)}
 function eventWeek(e){let k=e.assignedWeekStart||e.dateKey||'';const p=String(k).split('-').map(Number);if(!p[0]||!p[1]||!p[2])return null;let d=ud(p[0],p[1],p[2]);if(!e.assignedWeekStart)d=new Date(d.getTime()-d.getUTCDay()*86400000);const end=new Date(d.getTime()+6*86400000);return isoWeek(end)}
 function hitWeek(h){const p=String(h.dateKey||'').split('-').map(Number);if(!p[0]||!p[1]||!p[2])return null;const d=ud(p[0],p[1],p[2]);return isoWeek(d)}
 
@@ -57,6 +58,7 @@ function decoratePending(){
   const list=document.getElementById('pendingList');
   if(!list)return;
   const rows=[];
+  const prev=previousWeek();
   for(const item of [...list.querySelectorAll('.item')]){
     const addrEl=item.querySelector('.addr');
     if(!addrEl)continue;
@@ -65,10 +67,18 @@ function decoratePending(){
     if(!c)continue;
     const s=statsFor(c.address);
     item.dataset.repeatCount=String(s.count);
+    const important=s.weeks.some(([w])=>w===prev);
+    if(important){
+      item.style.border='2px solid #dc2626';
+      item.style.boxShadow='0 0 0 3px rgba(220,38,38,.08)';
+      item.dataset.previousWeekImportant='1';
+    }else if(item.dataset.previousWeekImportant){
+      item.style.border='';item.style.boxShadow='';delete item.dataset.previousWeekImportant;
+    }
     let box=item.querySelector('[data-repeat-home]');
     if(!box){box=document.createElement('div');box.dataset.repeatHome='1';box.style.cssText='margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap';item.appendChild(box)}
     const weekText=s.weeks.length?s.weeks.map(([w,n])=>`W${w}×${n}`).join(' · '):'';
-    box.innerHTML=`<span class="pill">Entered ×${s.count}</span>${weekText?`<span class="muted" style="font-weight:800">${weekText}</span>`:''}<span class="muted" style="font-weight:800">Drivers: ${driverText(s.drivers,'No previous drivers recorded')}</span>`;
+    box.innerHTML=`<span class="pill">Entered ×${s.count}</span>${weekText?`<span class="muted" style="font-weight:800">${weekText}</span>`:''}${important?`<span style="font-weight:900;color:#b91c1c">⚠ Previous week</span>`:''}<span class="muted" style="font-weight:800">Drivers: ${driverText(s.drivers,'No previous drivers recorded')}</span>`;
     rows.push({item,count:s.count,address:c.address||''});
   }
   rows.sort((a,b)=>b.count-a.count||a.address.localeCompare(b.address));
