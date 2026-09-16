@@ -1,5 +1,5 @@
-const CACHE='coach-shell-v5';
-const ASSETS=['/coach-logo.jpg','/manifest.json','/users-admin.js','/driver-sync.js'];
+const CACHE='coach-shell-v6';
+const ASSETS=['/coach-logo.jpg','/manifest.json','/users-admin.js','/driver-sync.js','/repeat-priority.js'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));
@@ -20,6 +20,7 @@ self.addEventListener('fetch',event=>{
         let html=await response.text();
         if(!html.includes('/users-admin.js')) html=html.replace('</body>','<script src="/users-admin.js?v=1"></script></body>');
         if(!html.includes('/driver-sync.js')) html=html.replace('</body>','<script type="module" src="/driver-sync.js?v=1"></script></body>');
+        if(!html.includes('/repeat-priority.js')) html=html.replace('</body>','<script type="module" src="/repeat-priority.js?v=1"></script></body>');
         return new Response(html,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
       }catch(e){return caches.match('/index.html')}
     })());
