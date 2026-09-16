@@ -1,6 +1,6 @@
 import{addressKey,store,recent}from'./analytics-core.js';
 
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[m]));
 let timer=0;
 
 function statsFor(address){
@@ -39,15 +39,14 @@ function decorateDatabase(){
   for(const r of rows)list.appendChild(r.item);
 }
 
-function decorateHome(){
+function decoratePending(){
   const list=document.getElementById('pendingList');
   if(!list)return;
   const rows=[];
   for(const item of [...list.querySelectorAll('.item')]){
     const addrEl=item.querySelector('.addr');
     if(!addrEl)continue;
-    let address=addrEl.textContent.trim();
-    address=address.replace(/^STOP\s*\d+\s*/i,'').trim();
+    let address=addrEl.textContent.trim().replace(/^STOP\s*\d+\s*/i,'').trim();
     const c=complaintForAddress(address);
     if(!c)continue;
     const s=statsFor(c.address);
@@ -62,12 +61,21 @@ function decorateHome(){
   for(const r of rows)list.appendChild(r.item);
 }
 
-function run(){decorateDatabase();decorateHome()}
-function schedule(){clearTimeout(timer);timer=setTimeout(run,80)}
-
-for(const id of ['complaintsList','pendingList']){
-  const el=document.getElementById(id);
-  if(el)new MutationObserver(schedule).observe(el,{childList:true,subtree:true});
+function renderMostRepeated(){
+  const list=document.getElementById('recentList');
+  if(!list)return;
+  const card=list.closest('.card');
+  const title=card?.querySelector('.sectionTitle');
+  if(title)title.innerHTML='<span class="sectionIcon">🔁</span>Most repeated addresses';
+  const rows=store.complaints.map(c=>({c,s:statsFor(c.address)})).filter(x=>x.s.count>0).sort((a,b)=>b.s.count-a.s.count||(a.c.address||'').localeCompare(b.c.address||''));
+  list.innerHTML=rows.length?rows.map(({c,s})=>{
+    const drivers=s.drivers.length?s.drivers.map(([name,count])=>`${esc(name)} ×${count}`).join(' · '):'No driver route appearances yet';
+    return `<div class="item"><div class="row between"><div><div class="addr">${esc(c.address||'')}</div>${c.notes?`<div class="notes">${esc(c.notes)}</div>`:''}</div><span class="pill">×${s.count}</span></div><div class="muted" style="margin-top:8px;font-weight:800">Drivers: ${drivers}</div></div>`;
+  }).join(''):'<div class="empty">No repeated-address history recorded yet.</div>';
 }
+
+function run(){decorateDatabase();decoratePending();renderMostRepeated()}
+function schedule(){clearTimeout(timer);timer=setTimeout(run,80)}
+for(const id of ['complaintsList','pendingList']){const el=document.getElementById(id);if(el)new MutationObserver(schedule).observe(el,{childList:true,subtree:true})}
 setInterval(run,1500);
 run();
