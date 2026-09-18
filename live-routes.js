@@ -22,7 +22,7 @@ function routeDuration(h){
  if(!h?.finishedAtMs||!Number.isFinite(Number(h.stop5AtMinutes)))return null;
  const finish=easternClock(Number(h.finishedAtMs));let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
 }
-let HISTORY=[],SAVED_ROUTES=[];
+let HISTORY=[],SAVED_ROUTES=[],RESCUE_HISTORY=[];
 function nameTokens(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[]}
 function twoNamesMatch(a,b){
  const A=nameTokens(a),B=nameTokens(b),used=new Set();let matches=0;
@@ -98,19 +98,22 @@ function ensureUI(){
  const b=document.createElement('button');b.dataset.page='live';b.innerHTML='<span class="ni">📊</span><span>Live</span>';nav.appendChild(b);
  const s=document.createElement('section');s.id='live';s.className='page';s.innerHTML=`
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
- <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveUrls">🔗 Itinerary URLs</button></div>
+ <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveRescueToggle">🚑 Rescue</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveUrls">🔗 Itinerary URLs</button></div>
  <div id="liveSummary" class="stats" style="margin-top:14px"></div><div id="liveList" class="list" style="margin-top:14px"></div></div>`;main.appendChild(s);
  document.querySelectorAll('.nav button').forEach(x=>x.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nav button').forEach(q=>q.classList.remove('on'));document.getElementById(x.dataset.page)?.classList.add('on');x.classList.add('on')}));
  document.querySelectorAll('.liveStation').forEach(x=>x.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window._coachStation=x.dataset.st;document.querySelectorAll('.liveStation').forEach(y=>{const active=y.dataset.st===window._coachStation;y.classList.toggle('blue',active);y.classList.toggle('soft',!active)});requestAnimationFrame(render)});
+ document.getElementById('liveRescueToggle').onclick=()=>{window._coachRescue=!window._coachRescue;const z=document.getElementById('liveRescueToggle');z.classList.toggle('blue',!!window._coachRescue);z.classList.toggle('soft',!window._coachRescue);render()};
  document.getElementById('liveUrls').onclick=()=>{const st=window._coachStation||'DJX3';const current=localStorage.getItem('coach_itinerary_'+st)||'';const v=prompt(st+' itinerary URL',current);if(v===null)return;try{const u=new URL(v.trim());if(u.hostname!=='logistics.amazon.com'||!u.pathname.includes('/operations/execution/itineraries'))throw Error();localStorage.setItem('coach_itinerary_'+st,u.toString());alert(st+' itinerary URL saved.')}catch{alert('Please paste a valid logistics.amazon.com itineraries URL.')}};
  document.getElementById('liveSettings').onclick=async()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,v=prompt(st+' route deadline (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_deadline_'+st,v);render()}};
 }
-let LIVE={DJX3:[],DJX4:[]};
+let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function getData(st){return LIVE[st]||[]}
 let rendering=false;
 function render(){
  if(rendering)return; rendering=true;
- ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,rows=getData(st);
+ ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline;
+ if(window._coachRescue){renderRescue(st,deadline);rendering=false;return}
+ const rows=getData(st);
  const calc=rows.map(r=>({...r,_p:predict(r,deadline,st)}));const late=calc.filter(r=>r._p.behind>0).length,behind=calc.reduce((a,r)=>a+r._p.behind,0);
  document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Projected late</span><b>${late}</b></div><div class="card stat"><span class="label">Stops behind</span><b>${behind}</b></div>`;
  document.getElementById('liveList').innerHTML=calc.length?calc.sort((a,b)=>{
@@ -122,5 +125,22 @@ function render(){
 }).map(r=>{const finished=Number(r.total)>0&&Number(r.done)>=Number(r.total),last=r.lastDelivery||r._p.current?.lastDelivery||null;return `<div class="item" style="${finished?'border:2px solid #22c55e;background:#f0fdf4':(r._p.behind?'border:2px solid #dc2626':'')}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${esc(r.route||'')} · ${st}</div></div><span class="pill" style="${finished?'background:#dcfce7;color:#15803d':''}">${r.done||0}/${r.total||0} stops</span></div>${finished?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#22c55e;color:white;font-size:11px;font-weight:900">✓ ROUTE COMPLETED</div>':(!r._p.routeLoaded?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#f59e0b;color:white;font-size:11px;font-weight:900">⚠ ROUTE NOT LOADED</div>':'')}${!finished&&r._p.routeLoaded&&!Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#dc2626;color:white;font-size:11px;font-weight:900">⚠ STOP 5 REAL TIME NOT FOUND</div>':''}<div class="addr" style="margin-top:10px">${finished?'COACH FINISH: '+esc(last||'Completed'):'COACH ETA: '+(r._p.eta?fmtMin(r._p.eta):'Learning...')}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · ${Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'Pace since Stop 5 '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'):'Live pace '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data')}${r._p.packages?' · '+r._p.packages+' packages':''}${!finished&&r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div><div class="muted" style="margin-top:4px">${r._p.model} · ${r._p.historyCount}/20 previous routes${r._p.current?.stop5AtText?' · Stop 5 '+esc(r._p.current.stop5AtText):''}</div></div>`}).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
  rendering=false;
 }
-async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=LIVE[st];const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'routes'),snap=>{SAVED_ROUTES=snap.docs.map(x=>({id:x.id,...x.data()}));render()})}setInterval(render,15000)}
+
+function rescueHistoryFor(r,st){
+ const key=r.driverKey||driverKey(r.name),prior=RESCUE_HISTORY.filter(h=>h.station===st&&h.driverKey===key&&h.day!==r.day).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+ return prior;
+}
+function rescuePredict(r){
+ const now=easternClock(),remaining=Math.max(0,Number(r.total||0)-Number(r.done||0)),prior=rescueHistoryFor(r,r.station);
+ const histPaces=prior.map(h=>Number(h.recentPace||h.amazonAvg||0)).filter(x=>x>0);
+ const personal=histPaces.length?histPaces.reduce((a,b)=>a+b,0)/histPaces.length:0;
+ const live=Number(r.recentPace||r.amazonAvg||0),pace=personal&&live?personal*.55+live*.45:(personal||live);
+ return{pace,eta:pace?now+remaining/pace*60:null,historyCount:prior.length};
+}
+function renderRescue(st,deadline){
+ const rows=RESCUES[st]||[],calc=rows.map(r=>({...r,_p:rescuePredict(r)})).sort((a,b)=>(b._p.eta||0)-(a._p.eta||0));
+ document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Rescue drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Active rescue stops</span><b>${rows.reduce((a,r)=>a+Math.max(0,Number(r.total||0)-Number(r.done||0)),0)}</b></div><div class="card stat"><span class="label">History</span><b>20 days</b></div>`;
+ document.getElementById('liveList').innerHTML=calc.length?calc.map(r=>{const finished=Number(r.total)>0&&Number(r.done)>=Number(r.total),routes=(r.routes||[r.route]).join(', ');return `<div class="item" style="${finished?'border:2px solid #22c55e;background:#f0fdf4':'border:2px solid #8b5cf6;background:#faf5ff'}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">🚑 RESCUE · ${esc(routes)} · ${st}</div></div><span class="pill">${r.done||0}/${r.total||0} stops</span></div><div class="addr" style="margin-top:10px">${finished?'RESCUE FINISH: '+esc(r.lastDelivery||'Completed'):'RESCUE ETA: '+(r._p.eta?fmtMin(r._p.eta):'Learning...')}</div><div class="muted">Pending ${Math.max(0,Number(r.total||0)-Number(r.done||0))} stops · Pace ${r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'} · ${r._p.historyCount}/20 previous rescue days</div></div>`}).join(''):'<div class="empty">No rescue drivers detected. Drivers with more than one CX will appear here automatically.</div>';
+}
+async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=LIVE[st];const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'routes'),snap=>{SAVED_ROUTES=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'liveRescues'),snap=>{RESCUES={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(RESCUES[d.station])RESCUES[d.station].push(d)});render()});onSnapshot(collection(db,'rescueHistory'),snap=>{RESCUE_HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()})}setInterval(render,15000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
