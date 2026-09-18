@@ -81,3 +81,25 @@ exports.adminUser = onRequest(async (req, res) => {
     return res.status(code).json({ error: err.message || 'server-error' });
   }
 });
+
+
+const { defineSecret } = require('firebase-functions/params');
+const COACH_COLLECTOR_KEY = defineSecret('COACH_COLLECTOR_KEY');
+exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=>{
+  cors(res); if(req.method==='OPTIONS')return res.status(204).send('');
+  if(req.method!=='POST')return res.status(405).json({error:'method-not-allowed'});
+  try{
+    if((req.get('X-COACH-Collector-Key')||'')!==COACH_COLLECTOR_KEY.value())return res.status(401).json({error:'invalid-collector-key'});
+    const station=String(req.body?.station||''); if(!['DJX3','DJX4'].includes(station))return res.status(400).json({error:'invalid-station'});
+    const capturedAt=String(req.body?.capturedAt||new Date().toISOString()), drivers=Array.isArray(req.body?.drivers)?req.body.drivers.slice(0,300):[];
+    const day=capturedAt.slice(0,10), batch=db.batch();
+    for(const r of drivers){
+      const route=String(r.route||'').toUpperCase().match(/^CX\d+$/)?.[0]; if(!route)continue;
+      const clean={station,day,route,name:String(r.name||'').slice(0,120),done:Math.max(0,Number(r.done)||0),total:Math.max(0,Number(r.total)||0),amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery:String(r.lastDelivery||'').slice(0,30)||null,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,capturedAt,capturedMs:Date.now(),updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+      batch.set(db.doc('liveRoutes/'+station+'_'+route),clean,{merge:true});
+      const snapId=station+'_'+day+'_'+route+'_'+Date.now();
+      batch.set(db.doc('liveSnapshots/'+snapId),clean);
+    }
+    await batch.commit(); return res.json({ok:true,station,count:drivers.length});
+  }catch(err){console.error(err);return res.status(500).json({error:'server-error'})}
+});
