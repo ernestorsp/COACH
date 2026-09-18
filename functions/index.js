@@ -85,6 +85,10 @@ exports.adminUser = onRequest(async (req, res) => {
 
 const { defineSecret } = require('firebase-functions/params');
 const COACH_COLLECTOR_KEY = defineSecret('COACH_COLLECTOR_KEY');
+function clockMinutes12(v){
+  const m=String(v||'').match(/(\d{1,2}):(\d{2})\s*([ap]m)/i);if(!m)return null;
+  let h=Number(m[1])%12;if(m[3].toLowerCase()==='pm')h+=12;return h*60+Number(m[2]);
+}
 function liveDriverKey(v){
   return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,100)||'unknown';
 }
@@ -106,19 +110,28 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
     for(const r of drivers){
       const route=String(r.route||'').toUpperCase().match(/^CX\d+$/)?.[0]; if(!route)continue;
       const name=String(r.name||'').slice(0,120),driverKey=liveDriverKey(name),done=Math.max(0,Number(r.done)||0),total=Math.max(0,Number(r.total)||0),historyId=station+'_'+day+'_'+driverKey;
-      const clean={station,day,route,name,driverKey,historyId,done,total,amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery:String(r.lastDelivery||'').slice(0,30)||null,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,capturedAt,capturedMs,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+      const lastDelivery=String(r.lastDelivery||'').slice(0,30)||null,lastDeliveryMinutes=clockMinutes12(lastDelivery);
+      const clean={station,day,route,name,driverKey,historyId,done,total,amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,capturedAt,capturedMs,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
       batch.set(db.doc('liveRoutes/'+station+'_'+route),clean,{merge:true});
       const snapId=station+'_'+day+'_'+route+'_'+capturedMs;
       batch.set(db.doc('liveSnapshots/'+snapId),clean);
-      batch.set(db.doc('driverRouteHistory/'+historyId),{station,day,dateKey:day,route,driverName:name,driverKey,totalStops:total,liveDone:done,lastSeenAt:capturedAt,lastSeenMs:capturedMs,amazonAvg:clean.amazonAvg,recentPace:clean.recentPace,amazonProjectedRTS:clean.amazonProjectedRTS,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
-      if(total>0&&done>=total)completed.push({historyId,capturedMs,capturedAt});
+      const hist={station,day,dateKey:day,route,driverName:name,driverKey,totalStops:total,liveDone:done,lastSeenAt:capturedAt,lastSeenMs:capturedMs,amazonAvg:clean.amazonAvg,recentPace:clean.recentPace,amazonProjectedRTS:clean.amazonProjectedRTS,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+      if(Number.isFinite(lastDeliveryMinutes)){
+        hist.lastDelivery=lastDelivery;hist.lastDeliveryMinutes=lastDeliveryMinutes;hist.doneAtLastDelivery=done;hist.totalAtLastDelivery=total;hist.lastDeliveryCapturedMs=capturedMs;
+      }
+      batch.set(db.doc('driverRouteHistory/'+historyId),hist,{merge:true});
+      if(total>0&&done>=total)completed.push({historyId,capturedMs,capturedAt,lastDelivery,lastDeliveryMinutes,done,total});
     }
     await batch.commit();
     for(const x of completed){
       const ref=db.doc('driverRouteHistory/'+x.historyId);
       await db.runTransaction(async tx=>{
         const s=await tx.get(ref),d=s.exists?s.data():{};
-        if(!d.finishedAtMs)tx.set(ref,{completed:true,finishedAtMs:x.capturedMs,finishedAt:x.capturedAt,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+        if(!d.finishedAtMs){
+          const finalDone=Number.isFinite(Number(d.doneAtLastDelivery))?Number(d.doneAtLastDelivery):x.done;
+          const finalTotal=Number.isFinite(Number(d.totalAtLastDelivery))?Number(d.totalAtLastDelivery):x.total;
+          tx.set(ref,{completed:true,finishedAtMs:x.capturedMs,finishedAt:x.capturedAt,performanceEndSource:d.lastDelivery?'last-delivery':'completion-detected',performanceEndAt:d.lastDelivery||x.capturedAt,performanceEndMinutes:Number.isFinite(Number(d.lastDeliveryMinutes))?Number(d.lastDeliveryMinutes):null,performanceDone:finalDone,performanceTotal:finalTotal,returnedOrUnfinishedStops:Math.max(0,finalTotal-finalDone),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+        }
       });
     }
     return res.json({ok:true,station,count:drivers.length});
