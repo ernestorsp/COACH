@@ -1,0 +1,1 @@
+const out=document.getElementById('out');document.getElementById('scan').onclick=async()=>{const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.id)return;chrome.tabs.sendMessage(tab.id,{type:'COACH_SCAN'},r=>{if(chrome.runtime.lastError){out.textContent=chrome.runtime.lastError.message;return}out.textContent=JSON.stringify(r,null,2)})};
