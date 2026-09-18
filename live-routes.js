@@ -21,7 +21,7 @@ function routeDuration(h){
  if(!h?.finishedAtMs||!Number.isFinite(Number(h.stop5AtMinutes)))return null;
  const finish=easternClock(Number(h.finishedAtMs));let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
 }
-let HISTORY=[];
+let HISTORY=[],SAVED_ROUTES=[];
 function nameTokens(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[]}
 function twoNamesMatch(a,b){
  const A=nameTokens(a),B=nameTokens(b),used=new Set();let matches=0;
@@ -33,13 +33,11 @@ function historyFor(r,st){
  const stationHistory=HISTORY.filter(h=>h.station===st);
  const byName=stationHistory.filter(h=>h.driverKey===key);
  const candidates=stationHistory.filter(h=>h.day===day&&String(h.route||'').toUpperCase()===route&&twoNamesMatch(r.name,h.driverName));
- const current=candidates.find(h=>Number(h.routeLoadedMs)>0)
-   ||candidates[0]
-   ||byName.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route)
-   ||null;
- const historyKey=current?.driverKey||key;
+ const current=candidates.find(h=>Number(h.routeLoadedMs)>0)||candidates[0]||byName.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route)||null;
+ const savedRoute=SAVED_ROUTES.find(x=>x.dateKey===day&&String(x.routeCode||'').toUpperCase()===route&&twoNamesMatch(r.name,x.driverName));
+ const historyKey=current?.driverKey||driverKey(savedRoute?.driverName||r.name)||key;
  const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
- return{current,prior,key:historyKey};
+ return{current,prior,key:historyKey,routeLoaded:!!savedRoute||Number(current?.routeLoadedMs)>0,savedRoute};
 }
 function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
@@ -74,7 +72,7 @@ function predict(r,deadline,st){
    eta=pace>0?nowM+Math.max(0,total-done)/pace*60:null;
  }
  const pace=currentPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
- return{pace,eta,late,behind,current,historyCount:prior.length,model,packages:pkg,packagesPerStop:pps};
+ return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:prior.length,model,packages:pkg,packagesPerStop:pps};
 }
 function ensureUI(){
  if(document.getElementById('live'))return;
@@ -98,8 +96,8 @@ function render(){
  ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,rows=getData(st);
  const calc=rows.map(r=>({...r,_p:predict(r,deadline,st)}));const late=calc.filter(r=>r._p.behind>0).length,behind=calc.reduce((a,r)=>a+r._p.behind,0);
  document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Projected late</span><b>${late}</b></div><div class="card stat"><span class="label">Stops behind</span><b>${behind}</b></div>`;
- document.getElementById('liveList').innerHTML=calc.length?calc.sort((a,b)=>b._p.behind-a._p.behind).map(r=>`<div class="item" style="${r._p.behind?'border:2px solid #dc2626':''}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${esc(r.route||'')} · ${st}</div></div><span class="pill">${r.done||0}/${r.total||0} stops</span></div>${!r._p.current?.routeLoadedMs?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#f59e0b;color:white;font-size:11px;font-weight:900">⚠ ROUTE NOT LOADED</div>':''}<div class="addr" style="margin-top:10px">COACH ETA: ${r._p.eta?fmtMin(r._p.eta):'Learning...'}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · Pace since Stop 5 ${r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'}${r._p.packages?' · '+r._p.packages+' packages':''}${r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div><div class="muted" style="margin-top:4px">${r._p.model} · ${r._p.historyCount}/20 previous routes${r._p.current?.stop5AtText?' · Stop 5 '+esc(r._p.current.stop5AtText):''}</div></div>`).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
+ document.getElementById('liveList').innerHTML=calc.length?calc.sort((a,b)=>b._p.behind-a._p.behind).map(r=>`<div class="item" style="${r._p.behind?'border:2px solid #dc2626':''}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${esc(r.route||'')} · ${st}</div></div><span class="pill">${r.done||0}/${r.total||0} stops</span></div>${!r._p.routeLoaded?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#f59e0b;color:white;font-size:11px;font-weight:900">⚠ ROUTE NOT LOADED</div>':''}<div class="addr" style="margin-top:10px">COACH ETA: ${r._p.eta?fmtMin(r._p.eta):'Learning...'}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · Pace since Stop 5 ${r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'}${r._p.packages?' · '+r._p.packages+' packages':''}${r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div><div class="muted" style="margin-top:4px">${r._p.model} · ${r._p.historyCount}/20 previous routes${r._p.current?.stop5AtText?' · Stop 5 '+esc(r._p.current.stop5AtText):''}</div></div>`).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
  rendering=false;
 }
-async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=LIVE[st];const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()})}setInterval(render,15000)}
+async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=LIVE[st];const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'routes'),snap=>{SAVED_ROUTES=snap.docs.map(x=>({id:x.id,...x.data()}));render()})}setInterval(render,15000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
