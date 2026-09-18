@@ -9,7 +9,7 @@ const db = admin.firestore();
 
 function cors(res) {
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-COACH-Collector-Key');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
 }
 
