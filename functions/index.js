@@ -88,6 +88,12 @@ const COACH_COLLECTOR_KEY = defineSecret('COACH_COLLECTOR_KEY');
 function liveDriverKey(v){
   return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,100)||'unknown';
 }
+function easternDay(v){
+  const d=new Date(v);
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+  const o=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  return o.year+'-'+o.month+'-'+o.day;
+}
 
 exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=>{
   cors(res); if(req.method==='OPTIONS')return res.status(204).send('');
@@ -96,7 +102,7 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
     if((req.get('X-COACH-Collector-Key')||'')!==COACH_COLLECTOR_KEY.value())return res.status(401).json({error:'invalid-collector-key'});
     const station=String(req.body?.station||''); if(!['DJX3','DJX4'].includes(station))return res.status(400).json({error:'invalid-station'});
     const capturedAt=String(req.body?.capturedAt||new Date().toISOString()), drivers=Array.isArray(req.body?.drivers)?req.body.drivers.slice(0,300):[];
-    const day=capturedAt.slice(0,10), capturedMs=Date.parse(capturedAt)||Date.now(), batch=db.batch(), completed=[];
+    const day=easternDay(capturedAt), capturedMs=Date.parse(capturedAt)||Date.now(), batch=db.batch(), completed=[];
     for(const r of drivers){
       const route=String(r.route||'').toUpperCase().match(/^CX\d+$/)?.[0]; if(!route)continue;
       const name=String(r.name||'').slice(0,120),driverKey=liveDriverKey(name),done=Math.max(0,Number(r.done)||0),total=Math.max(0,Number(r.total)||0),historyId=station+'_'+day+'_'+driverKey;
