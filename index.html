@@ -83,4 +83,9 @@ $('changePasswordBtn').onclick=async()=>{const p=$('newPassword').value,c=$('con
 $('addDriverBtn').onclick=()=>openDriver();$('addComplaintBtn').onclick=()=>openComplaint();$('fabAddAddress').onclick=()=>openComplaint();$('inviteUserBtn').onclick=()=>{$('inviteModal').classList.add('on')};$('dbSearch').oninput=renderComplaints;$('homeDriverFilter').onchange=renderPending;document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$((b.dataset.close)).classList.remove('on'));document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{if(b.id==='usersNav'&&state.me?.role!=='admin')return;showPage(b.dataset.page)});
 $('loginBtn').onclick=async()=>{try{$('loginMsg').textContent='Signing in...';await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);localStorage.setItem(AUTH_KEY,String(Date.now()+THIRTY_DAYS))}catch(e){$('loginMsg').textContent='Login failed. Check email and password.'}};$('logoutBtn').onclick=async()=>{localStorage.removeItem(AUTH_KEY);await signOut(auth)};onAuthStateChanged(auth,async u=>{if(u){let until=Number(localStorage.getItem(AUTH_KEY)||0);if(!until){until=Date.now()+THIRTY_DAYS;localStorage.setItem(AUTH_KEY,String(until))}if(Date.now()>until){localStorage.removeItem(AUTH_KEY);await signOut(auth);return}$('login').classList.add('hide');$('app').classList.remove('hide');try{const me=await ensureMe(u);if(me.mustChangePassword||me.status==='invited'){$('changePasswordModal').classList.add('on');return}await loadAll()}catch(e){toast(e?.message||'Could not load Firebase data.')}}else{$('app').classList.add('hide');$('login').classList.remove('hide');$('loginMsg').textContent=''}});
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-</script></body></html>
+</script><script type="module" src="/users-admin.js?v=20260918"></script>
+<script type="module" src="/driver-sync.js?v=20260918"></script>
+<script type="module" src="/repeat-priority.js?v=20260918"></script>
+<script src="/home-cache.js?v=20260918"></script>
+<script type="module" src="/live-routes.js?v=20260918"></script>
+</body></html>
