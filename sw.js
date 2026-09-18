@@ -22,7 +22,8 @@ self.addEventListener('fetch',event=>{
         ['users-admin.js',false],
         ['driver-sync.js',true],
         ['repeat-priority.js',true],
-        ['home-cache.js',false]
+        ['home-cache.js',false],
+        ['live-routes.js',true]
       ];
       for(const [name,module] of scripts){
         if(!html.includes('/'+name)&&!html.includes('"'+name)&&!html.includes("'"+name)){
