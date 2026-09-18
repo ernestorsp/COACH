@@ -40,9 +40,20 @@ function historyFor(r,st){
    const savedStation=String(x.station||((String(x.raw||'').match(/\b(DJX3|DJX4)\b/i)||[])[1])||'').toUpperCase();
    return savedCx===route&&(!savedStation||savedStation===st);
  });
- const historyKey=current?.driverKey||driverKey(savedRoute?.driverName||r.name)||key;
+ const routeStop5Minutes=Number(savedRoute?.stop5AtMinutes),routeStop5Text=savedRoute?.stop5AtText||null;
+ const mergedCurrent=current?{...current}:null;
+ if(savedRoute&&Number.isFinite(routeStop5Minutes)){
+   if(mergedCurrent){mergedCurrent.stop5AtMinutes=routeStop5Minutes;mergedCurrent.stop5AtText=routeStop5Text||mergedCurrent.stop5AtText}
+   else{
+     const synthetic={driverName:savedRoute.driverName,driverKey:driverKey(savedRoute.driverName),station:st,day,route,totalStops:savedRoute.totalStops,totalPackages:savedRoute.totalPackages,packagesPerStop:savedRoute.packagesPerStop,stop5AtMinutes:routeStop5Minutes,stop5AtText:routeStop5Text,routeLoadedMs:1};
+     const historyKey=synthetic.driverKey||key;
+     const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+     return{current:synthetic,prior,key:historyKey,routeLoaded:true,savedRoute};
+   }
+ }
+ const historyKey=mergedCurrent?.driverKey||driverKey(savedRoute?.driverName||r.name)||key;
  const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
- return{current,prior,key:historyKey,routeLoaded:!!savedRoute||Number(current?.routeLoadedMs)>0,savedRoute};
+ return{current:mergedCurrent,prior,key:historyKey,routeLoaded:!!savedRoute||Number(mergedCurrent?.routeLoadedMs)>0,savedRoute};
 }
 function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
