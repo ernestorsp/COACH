@@ -65,6 +65,16 @@ service cloud.firestore {
       allow read, write: if isActive();
     }
 
+    match /liveRoutes/{docId} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
+    match /liveSnapshots/{docId} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
