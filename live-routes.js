@@ -22,12 +22,19 @@ function routeDuration(h){
  const finish=easternClock(Number(h.finishedAtMs));let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
 }
 let HISTORY=[];
+function nameTokens(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[]}
+function twoNamesMatch(a,b){
+ const A=nameTokens(a),B=nameTokens(b),used=new Set();let matches=0;
+ for(const x of A){const i=B.findIndex((y,j)=>y===x&&!used.has(j));if(i>=0){used.add(i);matches++;if(matches>=2)return true}}
+ return false;
+}
 function historyFor(r,st){
  const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay()),route=String(r.route||'').toUpperCase();
  const stationHistory=HISTORY.filter(h=>h.station===st);
  const byName=stationHistory.filter(h=>h.driverKey===key);
- const currentByRoute=route?stationHistory.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route):null;
- const current=currentByRoute||byName.find(h=>h.day===day)||null;
+ const current=stationHistory.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route&&twoNamesMatch(r.name,h.driverName))
+   ||byName.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route)
+   ||null;
  const historyKey=current?.driverKey||key;
  const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
  return{current,prior,key:historyKey};
