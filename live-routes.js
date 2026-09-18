@@ -34,7 +34,12 @@ function historyFor(r,st){
  const byName=stationHistory.filter(h=>h.driverKey===key);
  const candidates=stationHistory.filter(h=>h.day===day&&String(h.route||'').toUpperCase()===route&&twoNamesMatch(r.name,h.driverName));
  const current=candidates.find(h=>Number(h.routeLoadedMs)>0)||candidates[0]||byName.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route)||null;
- const savedRoute=SAVED_ROUTES.find(x=>x.dateKey===day&&String(x.routeCode||'').toUpperCase()===route&&twoNamesMatch(r.name,x.driverName));
+ const savedRoute=SAVED_ROUTES.find(x=>{
+   if(x.dateKey!==day||!twoNamesMatch(r.name,x.driverName))return false;
+   const savedCx=String(x.routeCode||((String(x.raw||'').match(/\bCX\d+\b/i)||[])[0])||'').toUpperCase();
+   const savedStation=String(x.station||((String(x.raw||'').match(/\b(DJX3|DJX4)\b/i)||[])[1])||'').toUpperCase();
+   return savedCx===route&&(!savedStation||savedStation===st);
+ });
  const historyKey=current?.driverKey||driverKey(savedRoute?.driverName||r.name)||key;
  const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
  return{current,prior,key:historyKey,routeLoaded:!!savedRoute||Number(current?.routeLoadedMs)>0,savedRoute};
