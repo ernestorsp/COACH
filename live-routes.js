@@ -23,10 +23,14 @@ function routeDuration(h){
 }
 let HISTORY=[];
 function historyFor(r,st){
- const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay());
- const all=HISTORY.filter(h=>h.driverKey===key&&h.station===st),current=all.find(h=>h.day===day)||null;
- const prior=all.filter(h=>h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
- return{current,prior,key};
+ const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay()),route=String(r.route||'').toUpperCase();
+ const stationHistory=HISTORY.filter(h=>h.station===st);
+ const byName=stationHistory.filter(h=>h.driverKey===key);
+ const currentByRoute=route?stationHistory.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route):null;
+ const current=currentByRoute||byName.find(h=>h.day===day)||null;
+ const historyKey=current?.driverKey||key;
+ const prior=stationHistory.filter(h=>h.driverKey===historyKey&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+ return{current,prior,key:historyKey};
 }
 function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
