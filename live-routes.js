@@ -1,5 +1,5 @@
 import{getApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';
-import{getFirestore,doc,getDoc,setDoc,serverTimestamp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import{getFirestore,collection,onSnapshot}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const STATIONS={DJX3:{deadline:'21:00'},DJX4:{deadline:'20:00'}};
 const sleep=m=>new Promise(r=>setTimeout(r,m));
@@ -29,12 +29,13 @@ function ensureUI(){
  document.getElementById('liveUrls').onclick=()=>{const st=window._coachStation||'DJX3';const current=localStorage.getItem('coach_itinerary_'+st)||'';const v=prompt(st+' itinerary URL',current);if(v===null)return;try{const u=new URL(v.trim());if(u.hostname!=='logistics.amazon.com'||!u.pathname.includes('/operations/execution/itineraries'))throw Error();localStorage.setItem('coach_itinerary_'+st,u.toString());alert(st+' itinerary URL saved.')}catch{alert('Please paste a valid logistics.amazon.com itineraries URL.')}};
  document.getElementById('liveSettings').onclick=async()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,v=prompt(st+' route deadline (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_deadline_'+st,v);render()}};
 }
-function getData(st){try{return JSON.parse(localStorage.getItem('coach_live_'+st)||'[]')}catch{return[]}}
+let LIVE={DJX3:[],DJX4:[]};
+function getData(st){return LIVE[st]||[]}
 function render(){
  ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,rows=getData(st);
  const calc=rows.map(r=>({...r,_p:predict(r,deadline)}));const late=calc.filter(r=>r._p.behind>0).length,behind=calc.reduce((a,r)=>a+r._p.behind,0);
  document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Projected late</span><b>${late}</b></div><div class="card stat"><span class="label">Stops behind</span><b>${behind}</b></div>`;
  document.getElementById('liveList').innerHTML=calc.length?calc.sort((a,b)=>b._p.behind-a._p.behind).map(r=>`<div class="item" style="${r._p.behind?'border:2px solid #dc2626':''}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${esc(r.route||'')} · ${st}</div></div><span class="pill">${r.done||0}/${r.total||0} stops</span></div><div class="addr" style="margin-top:10px">COACH ETA: ${r._p.eta?fmtMin(r._p.eta):'Learning...'}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · Smart pace ${r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'}${r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div></div>`).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
 }
-function start(){ensureUI();render();setInterval(render,15000)}
+async function start(){ensureUI();render();const db=await dbReady();if(db)onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=LIVE[st];const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});setInterval(render,15000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
