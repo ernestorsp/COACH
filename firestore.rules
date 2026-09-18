@@ -75,6 +75,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /driverRouteHistory/{docId} {
+      allow read: if isActive();
+      allow create, update: if isActive();
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
