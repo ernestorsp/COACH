@@ -9,19 +9,27 @@ function mins(t){const [h,m]=String(t).split(':').map(Number);return h*60+m}
 function fmtMin(n){n=Math.round(n);const h=Math.floor(n/60)%24,m=n%60;return new Date(2000,0,1,h,m).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}
 function driverKey(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,100)||'unknown'}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function easternClock(ms=Date.now()){
+ const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(ms));
+ const o=Object.fromEntries(p.map(x=>[x.type,x.value]));return (Number(o.hour)%24)*60+Number(o.minute);
+}
+function easternDay(ms=Date.now()){
+ const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ms));
+ const o=Object.fromEntries(p.map(x=>[x.type,x.value]));return o.year+'-'+o.month+'-'+o.day;
+}
 function routeDuration(h){
  if(!h?.finishedAtMs||!Number.isFinite(Number(h.stop5AtMinutes)))return null;
- const d=new Date(Number(h.finishedAtMs)),finish=d.getHours()*60+d.getMinutes();let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
+ const finish=easternClock(Number(h.finishedAtMs));let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
 }
 let HISTORY=[];
 function historyFor(r,st){
- const key=r.driverKey||driverKey(r.name),day=String(r.day||new Date().toISOString().slice(0,10));
+ const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay());
  const all=HISTORY.filter(h=>h.driverKey===key&&h.station===st),current=all.find(h=>h.day===day)||null;
  const prior=all.filter(h=>h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
  return{current,prior,key};
 }
 function predict(r,deadline,st){
- const done=Number(r.done||0),total=Number(r.total||0),now=new Date(),nowM=now.getHours()*60+now.getMinutes(),{current,prior}=historyFor(r,st);
+ const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
  const stop5=Number(current?.stop5AtMinutes),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
