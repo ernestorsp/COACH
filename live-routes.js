@@ -131,6 +131,12 @@ function ensureUI(){
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
  <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveStartSettings">⏱ Stop 5 time</button><button class="btn soft" id="liveOpenAmazon">🔗 Open today's itinerary</button></div>
  <div id="liveSummary" class="stats" style="margin-top:14px"></div><div id="liveList" class="list" style="margin-top:14px"></div></div>`;main.appendChild(s);
+ const hd=document.createElement('section');hd.id='driverHistoryDetail';hd.className='page';hd.innerHTML=`
+ <div class="card">
+   <div class="row between" style="gap:12px;flex-wrap:wrap"><button class="btn soft" id="historyBack">← Back to History</button><span class="pill">Last 20 routes</span></div>
+   <div id="historyDetailHead" style="margin-top:16px"></div>
+   <div id="historyDetailRoutes" class="list" style="margin-top:14px"></div>
+ </div>`;main.appendChild(hd);
  const hs=document.createElement('section');hs.id='driverHistory';hs.className='page';hs.innerHTML=`
  <div class="card">
    <div class="row between"><div><h3 class="sectionTitle"><span class="sectionIcon">📈</span>Driver Delivery History</h3><div class="muted" style="margin-top:6px">Shows what COACH has actually saved for each driver and whether each route can be used for ETA.</div></div><span class="pill">2-name matching</span></div>
@@ -142,6 +148,7 @@ function ensureUI(){
  </div>`;main.appendChild(hs);
  document.querySelectorAll('.nav button').forEach(x=>x.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nav button').forEach(q=>q.classList.remove('on'));document.getElementById(x.dataset.page)?.classList.add('on');x.classList.add('on');if(x.dataset.page==='driverHistory')renderDriverHistory()}));
  document.getElementById('historyDriverSearch')?.addEventListener('input',renderDriverHistory);
+ document.getElementById('historyBack')?.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.getElementById('driverHistory')?.classList.add('on');document.querySelectorAll('.nav button').forEach(q=>q.classList.toggle('on',q.dataset.page==='driverHistory'));renderDriverHistory();window.scrollTo({top:0,behavior:'smooth'})});
  document.querySelectorAll('.liveStation').forEach(x=>x.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window._coachStation=x.dataset.st;document.querySelectorAll('.liveStation').forEach(y=>{const active=y.dataset.st===window._coachStation;y.classList.toggle('blue',active);y.classList.toggle('soft',!active)});requestAnimationFrame(render)});
  document.getElementById('liveOpenAmazon').onclick=()=>{const st=window._coachStation||'DJX3',url=itineraryUrl(st);localStorage.setItem('coach_itinerary_'+st,url);window.open(url,'_blank','noopener')};
  for(const st of Object.keys(STATIONS))localStorage.setItem('coach_itinerary_'+st,itineraryUrl(st));
@@ -163,6 +170,35 @@ function historyMergedRow(h,name){
  else if(!dur)reason='Duration invalid';
  return{h:merged,sr,dur,valid,reason};
 }
+function openDriverHistoryDetail(name){
+ window._coachHistoryDriver=name;
+ document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+ document.getElementById('driverHistoryDetail')?.classList.add('on');
+ renderDriverHistoryDetail();
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function renderDriverHistoryDetail(){
+ const head=document.getElementById('historyDetailHead'),list=document.getElementById('historyDetailRoutes');if(!head||!list)return;
+ const selected=String(window._coachHistoryDriver||'').trim();
+ const rows=HISTORY.filter(h=>h.completed&&twoNamesMatch(h.driverName,selected)).sort((a,b)=>String(b.day||b.dateKey||'').localeCompare(String(a.day||a.dateKey||''))||Number(b.finishedAtMs||0)-Number(a.finishedAtMs||0)).slice(0,20);
+ const fmtDay=k=>{const m=String(k).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'}):k};
+ const fmtClock=m=>Number.isFinite(Number(m))?(()=>{let x=Math.round(Number(m))%1440,h=Math.floor(x/60),mm=x%60;return ((h%12)||12)+':'+String(mm).padStart(2,'0')+' '+(h>=12?'PM':'AM')})():'MISSING';
+ const parseClock=v=>{let x=clockMinutes12(v);if(Number.isFinite(x))return x;const m=String(v||'').trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);return m?+m[1]*60 + +m[2]:null};
+ head.innerHTML=`<h2 style="margin:0;color:#0565bd">${esc(selected)}</h2><div class="muted" style="margin-top:5px">${rows.length} completed route${rows.length===1?'':'s'} saved · showing up to the latest 20</div>`;
+ list.innerHTML=rows.map((h,i)=>{const x=historyMergedRow(h,selected),stop5=Number(h.stop5AtMinutes),finishM=h.finishedAtMs?easternClock(Number(h.finishedAtMs)):clockMinutes12(h.performanceEndAt||h.lastDelivery),stops=Number(h.totalStops)||Number(x.sr?.totalStops)||0,packages=Number(h.totalPackages)||Number(x.sr?.totalPackages)||0,route=h.route||x.sr?.routeCode||'',bad=[!route,!Number.isFinite(stop5),!Number.isFinite(finishM),!stops,!packages];
+ const fld=(lab,val,b)=>`<div style="flex:1;min-width:145px;padding:11px;border:1px solid ${b?'#ef4444':'#cfe0ed'};background:${b?'#fff1f2':'#f9fcff'};border-radius:12px"><div class="label" style="color:${b?'#dc2626':''}">${lab}${b?' ⚠':''}</div><b style="color:${b?'#b91c1c':''}">${esc(String(val||'MISSING'))}</b></div>`;
+ return `<div class="item" style="border:2px solid ${bad.some(Boolean)?'#ef4444':'#b8dfc5'}"><div class="row between"><div><div class="drivername">${esc(fmtDay(h.day||h.dateKey||''))}</div><div class="muted">${esc(h.station||x.sr?.station||'?')}</div></div><button class="btn soft historyDetailEdit" data-i="${i}">✏ Edit</button></div><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">${fld('ROUTE',route,bad[0])}${fld('STOP 5 START',fmtClock(stop5),bad[1])}${fld('LAST DELIVERY',fmtClock(finishM),bad[2])}${fld('STOPS',stops,bad[3])}${fld('PACKAGES',packages,bad[4])}</div>${bad.some(Boolean)?'<div style="margin-top:9px;color:#b91c1c;font-weight:700">⚠ Review the red fields. COACH could not interpret these values correctly.</div>':''}</div>`}).join('')||'<div class="empty">No completed routes saved for this driver.</div>';
+ list.querySelectorAll('.historyDetailEdit').forEach(btn=>btn.onclick=async()=>{const h=rows[Number(btn.dataset.i)],x=historyMergedRow(h,selected);if(!h?.id)return alert('This record has no editable document ID.');
+  const route=prompt('Route / CX',h.route||x.sr?.routeCode||'');if(route===null)return;
+  const s5=prompt('Stop 5 start (1:30 PM or 13:30)',fmtClock(Number(h.stop5AtMinutes)));if(s5===null)return;const s5m=parseClock(s5);
+  const fin=prompt('Last delivery (6:45 PM or 18:45)',h.finishedAtMs?fmtClock(easternClock(Number(h.finishedAtMs))):String(h.performanceEndAt||h.lastDelivery||''));if(fin===null)return;const fm=parseClock(fin);
+  const stops=prompt('Total stops',String(Number(h.totalStops)||Number(x.sr?.totalStops)||''));if(stops===null)return;
+  const packages=prompt('Total packages',String(Number(h.totalPackages)||Number(x.sr?.totalPackages)||''));if(packages===null)return;
+  if(!Number.isFinite(s5m)||!Number.isFinite(fm)||!Number.isFinite(Number(stops))||!Number.isFinite(Number(packages)))return alert('Please correct the invalid values before saving.');
+  const day=String(h.day||h.dateKey||''),p=day.split('-').map(Number),base=new Date(Date.UTC(p[0],p[1]-1,p[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
+  try{await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
+ });
+}
 function renderDriverHistory(){
  const choices=document.getElementById('historyDriverChoices'),dates=document.getElementById('historyDateChoices'),list=document.getElementById('historyDriverList'),summary=document.getElementById('historyDriverSummary');if(!choices||!dates||!list||!summary)return;
  const q=String(document.getElementById('historyDriverSearch')?.value||'').trim().toLowerCase();
@@ -175,7 +211,7 @@ function renderDriverHistory(){
  const filtered=groups.filter(g=>!q||g.name.toLowerCase().includes(q)||[...g.aliases].some(a=>a.toLowerCase().includes(q)));
  choices.style.display='grid';choices.style.gridTemplateColumns='repeat(auto-fit,minmax(260px,1fr))';choices.style.gap='10px';
  choices.innerHTML=filtered.map((g,i)=>{const last=g.rows[0],on=window._coachHistoryDriver&&twoNamesMatch(g.name,window._coachHistoryDriver);return `<button class="coachHistoryDriver item" data-i="${i}" style="text-align:left;cursor:pointer;border:2px solid ${on?'#1495f5':'#d6e5f1'};background:${on?'#eef8ff':'#fff'};padding:14px;border-radius:16px"><div class="row between"><div><div class="drivername">${esc(g.name)}</div><div class="muted" style="margin-top:4px">${g.rows.length} completed route${g.rows.length===1?'':'s'} · last ${esc(fmtDay(last?.day||last?.dateKey||''))}</div></div><span class="pill">${on?'▲ Open':'▼ Details'}</span></div></button>`}).join('')||'<div class="empty" style="grid-column:1/-1">No drivers with completed route history yet.</div>';
- choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{const g=filtered[Number(b.dataset.i)];if(!g)return;window._coachHistoryDriver=g.name;window._coachHistoryDay='';renderDriverHistory();requestAnimationFrame(()=>document.getElementById('historyDriverSummary')?.scrollIntoView({behavior:'smooth',block:'start'}))});
+ choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{const g=filtered[Number(b.dataset.i)];if(!g)return;openDriverHistoryDetail(g.name)});
  let selected=String(window._coachHistoryDriver||'').trim(),selectedGroup=groups.find(g=>twoNamesMatch(g.name,selected)||[...g.aliases].some(a=>twoNamesMatch(a,selected)));
  if(!selectedGroup){summary.innerHTML='<div class="muted" style="margin-top:8px">Select a driver above to view the last 20 completed routes.</div>';dates.innerHTML='';list.innerHTML='';return}
  selected=selectedGroup.name;window._coachHistoryDriver=selected;const hist=selectedGroup.rows.slice(0,20),aliases=[...selectedGroup.aliases],mergedAll=hist.map(h=>historyMergedRow(h,selected)),valid=mergedAll.filter(x=>x.valid).length;
