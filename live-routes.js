@@ -1,5 +1,5 @@
 import{getApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';
-import{getFirestore,collection,onSnapshot}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import{getFirestore,collection,onSnapshot,doc,updateDoc}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const STATIONS={DJX3:{deadline:'21:00',assumedStop5:'13:30',serviceAreaId:'c599503f-5de9-4035-8532-125fcbc09b03'},DJX4:{deadline:'20:00',assumedStop5:'11:15',serviceAreaId:'fbf527d0-7ba7-4768-b452-ef8522843889'}};
 function todayEastern(){
@@ -167,50 +167,35 @@ function renderDriverHistory(){
  const choices=document.getElementById('historyDriverChoices'),dates=document.getElementById('historyDateChoices'),list=document.getElementById('historyDriverList'),summary=document.getElementById('historyDriverSummary');if(!choices||!dates||!list||!summary)return;
  const q=String(document.getElementById('historyDriverSearch')?.value||'').trim().toLowerCase();
  const fmtDay=k=>{const m=String(k).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return k;return new Date(Number(m[1]),Number(m[2])-1,Number(m[3])).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})};
-
- // Driver list = only drivers with completed route history. Merge aliases by 2-name matching.
+ const fmtClock=m=>Number.isFinite(Number(m))?(()=>{let x=Math.round(Number(m))%1440,h=Math.floor(x/60),mm=x%60,ap=h>=12?'PM':'AM';return ((h%12)||12)+':'+String(mm).padStart(2,'0')+' '+ap})():'MISSING';
+ const parseClock=v=>{let x=clockMinutes12(v);if(Number.isFinite(x))return x;const m=String(v||'').trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);return m?Number(m[1])*60+Number(m[2]):null};
  const groups=[];
- for(const h of HISTORY.filter(x=>x.completed)){
-   const n=String(h.driverName||'').trim();if(!n)continue;
-   let g=groups.find(x=>twoNamesMatch(x.name,n));
-   if(!g){g={name:n,aliases:new Set(),rows:[]};groups.push(g)}
-   g.aliases.add(n);g.rows.push(h);
- }
- groups.forEach(g=>g.rows.sort((a,b)=>String(b.day||b.dateKey||'').localeCompare(String(a.day||a.dateKey||''))||Number(b.finishedAtMs||b.lastSeenMs||0)-Number(a.finishedAtMs||a.lastSeenMs||0)));
- groups.sort((a,b)=>a.name.localeCompare(b.name));
+ for(const h of HISTORY.filter(x=>x.completed)){const n=String(h.driverName||'').trim();if(!n)continue;let g=groups.find(x=>twoNamesMatch(x.name,n));if(!g){g={name:n,aliases:new Set(),rows:[]};groups.push(g)}g.aliases.add(n);g.rows.push(h)}
+ groups.forEach(g=>g.rows.sort((a,b)=>String(b.day||b.dateKey||'').localeCompare(String(a.day||a.dateKey||''))||Number(b.finishedAtMs||b.lastSeenMs||0)-Number(a.finishedAtMs||a.lastSeenMs||0)));groups.sort((a,b)=>a.name.localeCompare(b.name));
  const filtered=groups.filter(g=>!q||g.name.toLowerCase().includes(q)||[...g.aliases].some(a=>a.toLowerCase().includes(q)));
-
- choices.style.display='grid';
- choices.style.gridTemplateColumns='repeat(auto-fit,minmax(260px,1fr))';
- choices.style.gap='10px';
- choices.innerHTML=filtered.map((g,i)=>{const last=g.rows[0],days=[...new Set(g.rows.map(r=>String(r.day||r.dateKey||'')).filter(Boolean))];return `<button class="coachHistoryDriver item" data-i="${i}" style="text-align:left;cursor:pointer;border:1px solid #d6e5f1;background:#fff;padding:14px;border-radius:16px"><div class="row between"><div><div class="drivername">${esc(g.name)}</div><div class="muted" style="margin-top:4px">${g.rows.length} completed route${g.rows.length===1?'':'s'} · last ${esc(fmtDay(last?.day||last?.dateKey||''))}</div></div><span class="pill">▾ Details</span></div></button>`}).join('')||'<div class="empty" style="grid-column:1/-1">No drivers with completed route history yet.</div>';
-
+ choices.style.display='grid';choices.style.gridTemplateColumns='repeat(auto-fit,minmax(260px,1fr))';choices.style.gap='10px';
+ choices.innerHTML=filtered.map((g,i)=>{const last=g.rows[0];return `<button class="coachHistoryDriver item" data-i="${i}" style="text-align:left;cursor:pointer;border:1px solid #d6e5f1;background:#fff;padding:14px;border-radius:16px"><div class="row between"><div><div class="drivername">${esc(g.name)}</div><div class="muted" style="margin-top:4px">${g.rows.length} completed route${g.rows.length===1?'':'s'} · last ${esc(fmtDay(last?.day||last?.dateKey||''))}</div></div><span class="pill">▾ Details</span></div></button>`}).join('')||'<div class="empty" style="grid-column:1/-1">No drivers with completed route history yet.</div>';
  choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{const g=filtered[Number(b.dataset.i)];if(!g)return;window._coachHistoryDriver=g.name;window._coachHistoryDay='';renderDriverHistory()});
-
- let selected=String(window._coachHistoryDriver||'').trim();
- let selectedGroup=groups.find(g=>twoNamesMatch(g.name,selected)||[...g.aliases].some(a=>twoNamesMatch(a,selected)));
+ let selected=String(window._coachHistoryDriver||'').trim(),selectedGroup=groups.find(g=>twoNamesMatch(g.name,selected)||[...g.aliases].some(a=>twoNamesMatch(a,selected)));
  if(!selectedGroup){summary.innerHTML='<div class="muted" style="margin-top:8px">Select a driver above to view the last 20 completed routes.</div>';dates.innerHTML='';list.innerHTML='';return}
- selected=selectedGroup.name;window._coachHistoryDriver=selected;
-
- const hist=selectedGroup.rows.slice(0,20);
- const aliases=[...selectedGroup.aliases];
- const mergedAll=hist.map(h=>historyMergedRow(h,selected));
- const valid=mergedAll.filter(x=>x.valid).length;
+ selected=selectedGroup.name;window._coachHistoryDriver=selected;const hist=selectedGroup.rows.slice(0,20),aliases=[...selectedGroup.aliases],mergedAll=hist.map(h=>historyMergedRow(h,selected)),valid=mergedAll.filter(x=>x.valid).length;
  summary.innerHTML=`<div class="stats"><div class="card stat"><span class="label">LAST ROUTES</span><b>${hist.length}</b></div><div class="card stat"><span class="label">ETA READY</span><b>${valid}</b></div><div class="card stat"><span class="label">ALIASES</span><b>${aliases.length}</b></div></div><div class="muted" style="margin:8px 2px 0"><b>${esc(selected)}</b> · ${aliases.map(esc).join(' · ')}</div>`;
-
- const dayMap=new Map();
- for(const h of hist){const d=String(h.day||h.dateKey||'Unknown date');if(!dayMap.has(d))dayMap.set(d,[]);dayMap.get(d).push(h)}
- const dayKeys=[...dayMap.keys()].sort((a,b)=>String(b).localeCompare(String(a))).slice(0,20);
- let selectedDay=String(window._coachHistoryDay||'');
- if(!dayKeys.includes(selectedDay))selectedDay=dayKeys[0]||'';
- window._coachHistoryDay=selectedDay;
-
- dates.innerHTML=dayKeys.map((d,i)=>`<button class="btn ${d===selectedDay?'blue':'soft'} coachHistoryDay" data-i="${i}" style="padding:8px 11px">${esc(fmtDay(d))}</button>`).join('');
- dates.querySelectorAll('.coachHistoryDay').forEach(b=>b.onclick=()=>{window._coachHistoryDay=dayKeys[Number(b.dataset.i)]||'';renderDriverHistory()});
-
+ const dayMap=new Map();for(const h of hist){const d=String(h.day||h.dateKey||'Unknown date');if(!dayMap.has(d))dayMap.set(d,[]);dayMap.get(d).push(h)}
+ const dayKeys=[...dayMap.keys()].sort((a,b)=>String(b).localeCompare(String(a))).slice(0,20);let selectedDay=String(window._coachHistoryDay||'');if(!dayKeys.includes(selectedDay))selectedDay=dayKeys[0]||'';window._coachHistoryDay=selectedDay;
+ dates.innerHTML=dayKeys.map((d,i)=>`<button class="btn ${d===selectedDay?'blue':'soft'} coachHistoryDay" data-i="${i}" style="padding:8px 11px">${esc(fmtDay(d))}</button>`).join('');dates.querySelectorAll('.coachHistoryDay').forEach(b=>b.onclick=()=>{window._coachHistoryDay=dayKeys[Number(b.dataset.i)]||'';renderDriverHistory()});
  const dayRows=(dayMap.get(selectedDay)||[]).map(h=>historyMergedRow(h,selected));
- list.innerHTML=dayRows.map(x=>{const h=x.h,finish=h.performanceEndAt||h.lastDelivery||(h.finishedAtMs?new Date(Number(h.finishedAtMs)).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):null),status=x.valid?'<span class="pill" style="background:#dcfce7;color:#15803d">✓ ETA READY</span>':'<span class="pill" style="background:#fff3cd;color:#9a6700">⚠ '+esc(x.reason)+'</span>';return `<div class="item" style="border:1px solid ${x.valid?'#86d7a5':'#e8c76d'}"><div class="row between"><div><div class="drivername">${esc(h.driverName||selected)}</div><div class="muted">${esc(fmtDay(selectedDay))} · ${esc(h.station||x.sr?.station||'?')} · ${esc(h.route||x.sr?.routeCode||'CX ?')}</div></div>${status}</div><div class="row" style="margin-top:10px;gap:8px"><span class="pill">Stops: ${Number(h.totalStops)||Number(x.sr?.totalStops)||0}</span><span class="pill">Stop 5: ${esc(h.stop5AtText||x.sr?.stop5AtText||'MISSING')}</span><span class="pill">Finish: ${esc(finish||'MISSING')}</span><span class="pill">Saved route: ${x.sr?'YES':'NO'}</span>${x.dur?`<span class="pill">Duration: ${Math.round(x.dur)} min</span>`:''}</div><div class="muted" style="margin-top:9px">Completed: YES · Last live done: ${Number(h.liveDone)||0}/${Number(h.totalStops)||0} · Packages: ${Number(h.totalPackages)||0}</div></div>`}).join('');
-}
+ list.innerHTML=dayRows.map((x,i)=>{const h=x.h,stop5=Number(h.stop5AtMinutes),finishM=h.finishedAtMs?easternClock(Number(h.finishedAtMs)):clockMinutes12(h.performanceEndAt||h.lastDelivery),stops=Number(h.totalStops)||Number(x.sr?.totalStops)||0,packages=Number(h.totalPackages)||Number(x.sr?.totalPackages)||0,route=h.route||x.sr?.routeCode||'',badStop5=!Number.isFinite(stop5),badFinish=!Number.isFinite(finishM),badStops=!stops,badPackages=!packages,badRoute=!route;
+ const field=(label,val,bad)=>`<div style="min-width:150px;flex:1;padding:10px 12px;border-radius:12px;border:1px solid ${bad?'#ef4444':'#cfe0ed'};background:${bad?'#fff1f2':'#f9fcff'}"><div class="label" style="color:${bad?'#dc2626':''}">${label}${bad?' ⚠':''}</div><b style="color:${bad?'#b91c1c':''}">${esc(val||'MISSING')}</b></div>`;
+ return `<div class="item" style="border:1px solid ${(badStop5||badFinish||badStops||badPackages||badRoute)?'#ef4444':'#86d7a5'}"><div class="row between"><div><div class="drivername">${esc(h.driverName||selected)}</div><div class="muted">${esc(fmtDay(selectedDay))} · ${esc(h.station||x.sr?.station||'?')}</div></div><button class="btn soft coachEditHistory" data-i="${i}">✏ Edit</button></div><div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">${field('ROUTE',route,badRoute)}${field('STOP 5 START',fmtClock(stop5),badStop5)}${field('LAST DELIVERY',fmtClock(finishM),badFinish)}${field('STOPS',stops||'',badStops)}${field('PACKAGES',packages||'',badPackages)}</div>${(badStop5||badFinish||badStops||badPackages||badRoute)?'<div style="margin-top:9px;color:#b91c1c;font-weight:700">⚠ COACH could not interpret one or more fields correctly. Review the red values.</div>':''}</div>`}).join('');
+ list.querySelectorAll('.coachEditHistory').forEach(btn=>btn.onclick=async()=>{const x=dayRows[Number(btn.dataset.i)],h=x?.h;if(!h?.id)return alert('This history record cannot be edited because its document ID is missing.');
+   const route=prompt('Route / CX',h.route||x.sr?.routeCode||'');if(route===null)return;
+   const s5=prompt('Stop 5 start time (example 1:30 PM or 13:30)',fmtClock(Number(h.stop5AtMinutes)));if(s5===null)return;const s5m=parseClock(s5);
+   const oldFinish=h.finishedAtMs?fmtClock(easternClock(Number(h.finishedAtMs))):String(h.performanceEndAt||h.lastDelivery||'');const fin=prompt('Last delivery time (example 6:45 PM or 18:45)',oldFinish);if(fin===null)return;const fm=parseClock(fin);
+   const stops=prompt('Total stops',String(Number(h.totalStops)||Number(x.sr?.totalStops)||''));if(stops===null)return;const packages=prompt('Total packages',String(Number(h.totalPackages)||Number(x.sr?.totalPackages)||''));if(packages===null)return;
+   if(!Number.isFinite(s5m)||!Number.isFinite(fm)||!Number.isFinite(Number(stops))||!Number.isFinite(Number(packages)))return alert('Check the red/missing values. Times must be like 1:30 PM or 13:30, and stops/packages must be numbers.');
+   const day=String(h.day||h.dateKey||selectedDay),parts=day.split('-').map(Number),base=new Date(Date.UTC(parts[0],parts[1]-1,parts[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
+   try{await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});}catch(e){alert('Could not save: '+(e?.message||e))}
+ })}
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function rescueOverrideKey(st,r){return 'coach_not_rescue_'+st+'_'+driverKey(r.name)}
 function isRescueRow(st,r){
