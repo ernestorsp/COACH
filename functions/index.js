@@ -85,12 +85,63 @@ exports.adminUser = onRequest(async (req, res) => {
 
 const { defineSecret } = require('firebase-functions/params');
 const COACH_COLLECTOR_KEY = defineSecret('COACH_COLLECTOR_KEY');
+const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const COACH_ALERT_EMAIL = defineSecret('COACH_ALERT_EMAIL');
+const crypto = require('crypto');
 function clockMinutes12(v){
   const m=String(v||'').match(/(\d{1,2}):(\d{2})\s*([ap]m)/i);if(!m)return null;
   let h=Number(m[1])%12;if(m[3].toLowerCase()==='pm')h+=12;return h*60+Number(m[2]);
 }
 function liveDriverKey(v){
   return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,100)||'unknown';
+}
+function nameTokens(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[]}
+function twoNamesMatch(a,b){const A=nameTokens(a),B=nameTokens(b),used=new Set();let n=0;for(const x of A){const i=B.findIndex((y,j)=>y===x&&!used.has(j));if(i>=0){used.add(i);if(++n>=2)return true}}return false}
+function htmlEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function reasonText(note){
+  const n=String(note||'').trim(),q=n.toLowerCase();
+  if(/wrong address|incorrect address|direccion incorrecta|dirección incorrecta/.test(q))return{en:'Previous complaint related to delivery to the wrong address. Please verify the address carefully before completing the delivery.',es:'Complaint anterior relacionado con entrega en la dirección incorrecta. Por favor, verifica bien la dirección antes de completar la entrega.'};
+  if(/neighbor|vecino/.test(q))return{en:"Previous complaint related to delivery to a neighbor. Please make sure the package is left at the customer's address unless the instructions say otherwise.",es:'Complaint anterior relacionado con entrega a un vecino. Por favor, asegúrate de dejar el paquete en la dirección del cliente, salvo que las instrucciones indiquen lo contrario.'};
+  if(/instruction|instruccion|instrucción/.test(q))return{en:"Previous complaint related to delivery instructions. Please read and follow the customer's instructions carefully.",es:'Complaint anterior relacionado con las instrucciones de entrega. Por favor, lee y sigue cuidadosamente todas las instrucciones del cliente.'};
+  if(/throw|threw|tirar|lanz/.test(q))return{en:'Previous complaint related to how the package was handled. Please place the package carefully and do not throw it.',es:'Complaint anterior relacionado con cómo se manipuló el paquete. Por favor, coloca el paquete con cuidado y no lo tires.'};
+  return{en:'Previous complaint: '+n,es:'Complaint anterior: '+n};
+}
+async function sendComplaintAlert(driverName,station,rows){
+  const to=String(COACH_ALERT_EMAIL.value()||'').trim(); if(!to||!rows.length)return false;
+  const first=String(driverName||'Driver').trim().split(/\s+/)[0]||'Driver';
+  const en=rows.map(x=>{const r=reasonText(x.notes).en;return '<li style="margin:0 0 16px"><b>STOP '+x.stop+' – '+htmlEsc(x.address)+'</b><br><span>'+htmlEsc(r)+'</span></li>'}).join('');
+  const es=rows.map(x=>{const r=reasonText(x.notes).es;return '<li style="margin:0 0 16px"><b>STOP '+x.stop+' – '+htmlEsc(x.address)+'</b><br><span>'+htmlEsc(r)+'</span></li>'}).join('');
+  const html='<div style="font-family:Arial,sans-serif;max-width:680px;color:#0f172a;line-height:1.5"><h2 style="color:#087ee5">COACH · Complaint Alert</h2><h3>English</h3><p>Hello '+htmlEsc(first)+', just a heads-up about '+(rows.length===1?'this stop':'these stops')+'. These customers have submitted complaints before. <b>This does NOT mean the complaints were against you</b>; they may have been related to deliveries by other drivers. Please take special care at these locations:</p><ul>'+en+'</ul><p>Thank you!</p><hr style="border:0;border-top:1px solid #dbe8f2;margin:24px 0"><h3>Español</h3><p>Hola '+htmlEsc(first)+', solo para avisarte sobre '+(rows.length===1?'esta parada':'estas paradas')+'. Estos clientes han puesto complaints anteriormente. <b>Esto NO significa que los complaints hayan sido contra ti</b>; pudieron haber sido por entregas de otros drivers. Por favor, ten especial cuidado en estas ubicaciones:</p><ul>'+es+'</ul><p>¡Gracias!</p></div>';
+  const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+RESEND_API_KEY.value(),'Content-Type':'application/json'},body:JSON.stringify({from:'COACH <notifications@aaxiclosing.com>',to:[to],subject:'COACH alert · '+first+' · '+station,html})});
+  if(!rr.ok)throw new Error('resend-'+rr.status+': '+await rr.text()); return true;
+}
+async function processComplaintProgress(station,day,liveRows){
+  const [routeSnap,complaintSnap]=await Promise.all([db.collection('routes').where('dateKey','==',day).get(),db.collection('complaints').get()]);
+  const routes=routeSnap.docs.map(x=>({id:x.id,...x.data()})), complaints=new Map(complaintSnap.docs.map(x=>[String(x.data().normalizedAddress||''),{id:x.id,...x.data()}]));
+  for(const live of liveRows){
+    if(live.isRescue||Number(live.routeCount||0)>1)continue;
+    const route=routes.find(x=>String(x.routeCode||'').toUpperCase()===String(live.route||'').toUpperCase()&&(!x.station||x.station===station)&&twoNamesMatch(x.driverName,live.name));
+    if(!route)continue;
+    const done=Math.max(0,Number(live.done)||0), alerts=[];
+    for(const stop of (route.stops||[])){
+      const c=complaints.get(String(stop.normalizedAddress||'')); if(!c)continue;
+      const n=Number(stop.stop); if(!Number.isFinite(n))continue;
+      const key=[day,route.driverId,n,stop.normalizedAddress].join('|');
+      if(n<=done){
+        const id=crypto.createHash('sha1').update(key).digest('hex');
+        await db.doc('doneStops/'+id).set({key,dateKey:day,driverId:route.driverId,driverName:route.driverName,stop:n,normalizedAddress:stop.normalizedAddress,completedAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-auto'},{merge:true});
+        continue;
+      }
+      if(n-done<=5){
+        const alertId=crypto.createHash('sha1').update([day,station,route.driverId,n,stop.normalizedAddress].join('|')).digest('hex'),ref=db.doc('complaintAlerts/'+alertId),snap=await ref.get();
+        if(!snap.exists)alerts.push({ref,stop:n,address:stop.address,notes:c.notes||'',normalizedAddress:stop.normalizedAddress});
+      }
+    }
+    if(alerts.length){
+      await sendComplaintAlert(route.driverName||live.name,station,alerts);
+      const b=db.batch(); for(const a of alerts)b.set(a.ref,{day,dateKey:day,station,driverId:route.driverId,driverName:route.driverName,route:live.route,stop:a.stop,address:a.address,normalizedAddress:a.normalizedAddress,sentAt:admin.firestore.FieldValue.serverTimestamp()}); await b.commit();
+    }
+  }
 }
 function easternDay(v){
   const d=new Date(v);
@@ -99,7 +150,7 @@ function easternDay(v){
   return o.year+'-'+o.month+'-'+o.day;
 }
 
-exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=>{
+exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY,RESEND_API_KEY,COACH_ALERT_EMAIL]}, async (req,res)=>{
   cors(res); if(req.method==='OPTIONS')return res.status(204).send('');
   if(req.method!=='POST')return res.status(405).json({error:'method-not-allowed'});
   try{
@@ -134,6 +185,7 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
       }
     }
     await batch.commit();
+    try{await processComplaintProgress(station,day,drivers.map(r=>{const routes=(Array.isArray(r.routes)?r.routes:[r.route]).map(x=>String(x||'').toUpperCase()).filter(x=>/^CX\d+$/.test(x));return{...r,route:routes[0]||'',routeCount:routes.length,isRescue:routes.length>1}}))}catch(alertErr){console.error('complaint-progress',alertErr)}
     for(const x of completed){
       const ref=db.doc('driverRouteHistory/'+x.historyId);
       await db.runTransaction(async tx=>{
