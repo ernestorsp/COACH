@@ -40,9 +40,12 @@ function twoNamesMatch(a,b){
 function historyFor(r,st){
  const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay()),route=String(r.route||'').toUpperCase();
  const stationHistory=HISTORY.filter(h=>h.station===st);
- const byName=stationHistory.filter(h=>h.driverKey===key||twoNamesMatch(r.name,h.driverName));
- const candidates=stationHistory.filter(h=>h.day===day&&String(h.route||'').toUpperCase()===route&&twoNamesMatch(r.name,h.driverName));
- const current=candidates.find(h=>Number(h.routeLoadedMs)>0)||candidates[0]||byName.find(h=>h.day===day&&String(h.route||'').toUpperCase()===route)||null;
+ // Driver identity rule: exactly the rule requested for COACH history matching —
+ // any TWO name tokens in common are enough; CX/route does not need to match across days.
+ const sameDriver=h=>twoNamesMatch(r.name,h.driverName);
+ const byName=stationHistory.filter(sameDriver);
+ const candidates=byName.filter(h=>h.day===day&&String(h.route||'').toUpperCase()===route);
+ const current=candidates.find(h=>Number(h.routeLoadedMs)>0)||candidates[0]||byName.find(h=>h.day===day)||null;
  const savedRoute=SAVED_ROUTES.find(x=>{
    if(x.dateKey!==day||!twoNamesMatch(r.name,x.driverName))return false;
    const savedCx=String(x.routeCode||((String(x.raw||'').match(/\bCX\d+\b/i)||[])[0])||'').toUpperCase();
@@ -55,14 +58,13 @@ function historyFor(r,st){
    if(mergedCurrent){mergedCurrent.stop5AtMinutes=routeStop5Minutes;mergedCurrent.stop5AtText=routeStop5Text||mergedCurrent.stop5AtText}
    else{
      const synthetic={driverName:savedRoute.driverName,driverKey:driverKey(savedRoute.driverName),station:st,day,route,totalStops:savedRoute.totalStops,totalPackages:savedRoute.totalPackages,packagesPerStop:savedRoute.packagesPerStop,stop5AtMinutes:routeStop5Minutes,stop5AtText:routeStop5Text,routeLoadedMs:1};
-     const historyKey=synthetic.driverKey||key;
-     const prior=stationHistory.filter(h=>(h.driverKey===historyKey||twoNamesMatch(savedRoute?.driverName||r.name,h.driverName))&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
-     return{current:synthetic,prior,key:historyKey,routeLoaded:true,savedRoute};
+     const prior=stationHistory.filter(h=>twoNamesMatch(savedRoute.driverName,h.driverName)&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+     return{current:synthetic,prior,key:synthetic.driverKey,routeLoaded:true,savedRoute};
    }
  }
- const historyKey=mergedCurrent?.driverKey||driverKey(savedRoute?.driverName||r.name)||key;
- const prior=stationHistory.filter(h=>(h.driverKey===historyKey||twoNamesMatch(savedRoute?.driverName||r.name,h.driverName))&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
- return{current:mergedCurrent,prior,key:historyKey,routeLoaded:!!savedRoute||Number(mergedCurrent?.routeLoadedMs)>0,savedRoute};
+ const historyName=savedRoute?.driverName||r.name;
+ const prior=stationHistory.filter(h=>twoNamesMatch(historyName,h.driverName)&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+ return{current:mergedCurrent,prior,key:driverKey(historyName)||key,routeLoaded:!!savedRoute||Number(mergedCurrent?.routeLoadedMs)>0,savedRoute};
 }
 function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
