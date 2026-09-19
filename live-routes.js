@@ -1,7 +1,7 @@
 import{getApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';
 import{getFirestore,collection,onSnapshot}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
-const STATIONS={DJX3:{deadline:'21:00',serviceAreaId:'c599503f-5de9-4035-8532-125fcbc09b03'},DJX4:{deadline:'20:00',serviceAreaId:'fbf527d0-7ba7-4768-b452-ef8522843889'}};
+const STATIONS={DJX3:{deadline:'21:00',assumedStop5:'13:30',serviceAreaId:'c599503f-5de9-4035-8532-125fcbc09b03'},DJX4:{deadline:'20:00',assumedStop5:'11:15',serviceAreaId:'fbf527d0-7ba7-4768-b452-ef8522843889'}};
 function todayEastern(){
  const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),o=Object.fromEntries(p.map(x=>[x.type,x.value]));
  return o.year+'-'+o.month+'-'+o.day;
@@ -81,7 +81,7 @@ function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current}=historyFor(r,st);
  const matchedPrior=completedPriorHistory(st,String(r.day||easternDay()),r.name);
  const prior=usablePriorHistory(st,String(r.day||easternDay()),r.name);
- const stop5=Number(current?.stop5AtMinutes),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
+ const realStop5=Number(current?.stop5AtMinutes),assumedStop5Text=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,assumedStop5=mins(assumedStop5Text),stop5=Number.isFinite(realStop5)?realStop5:assumedStop5,usingAssumedStop5=!Number.isFinite(realStop5),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
  let histDur=null;
@@ -106,20 +106,20 @@ function predict(r,deadline,st){
  if(paceRows.length){let sw=0,sp=0;paceRows.forEach((p,i)=>{const w=Math.max(.55,1-i*.025);sp+=p*w;sw+=w});histPace=sw?sp/sw:null}
  if(histDur&&Number.isFinite(stop5)){
    let predictedDur=histDur;
-   if(currentPace>0&&done>8){
+   if(!usingAssumedStop5&&currentPace>0&&done>8){
      let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;
      const actualFrac=(done-5)/Math.max(1,total-5),expectedFrac=elapsed/histDur,perf=expectedFrac>0?clamp(actualFrac/expectedFrac,.70,1.35):1;
      predictedDur=histDur/Math.pow(perf,.65);
    }
-   eta=stop5+predictedDur;model='Personal history';
+   eta=stop5+predictedDur;model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
  }else{
    const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0);
-   // Do not invent a finish time before the route has actually begun.
-   eta=done>0&&pace>0?nowM+Math.max(0,total-done)/pace*60:null;
-   if(histPace)model='Personal history';
+   // Before real progress/route timing is available, estimate from the station's editable assumed Stop 5.
+   eta=pace>0?(usingAssumedStop5?stop5+Math.max(0,total-5)/pace*60:nowM+Math.max(0,total-done)/pace*60):null;
+   if(histPace)model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
  }
  const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
- return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps};
+ return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps,usingAssumedStop5,stop5UsedText:usingAssumedStop5?assumedStop5Text:(current?.stop5AtText||null)};
 }
 function ensureUI(){
  if(document.getElementById('live'))return;
@@ -129,7 +129,7 @@ function ensureUI(){
  const historyBtn=document.createElement('button');historyBtn.dataset.page='driverHistory';historyBtn.innerHTML='<span class="ni">📈</span><span>History</span>';const driversBtn=nav.querySelector('button[data-page="drivers"]');if(driversBtn)driversBtn.after(historyBtn);else nav.appendChild(historyBtn);
  const s=document.createElement('section');s.id='live';s.className='page';s.innerHTML=`
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
- <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveOpenAmazon">🔗 Open today's itinerary</button></div>
+ <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveStartSettings">⏱ Stop 5 time</button><button class="btn soft" id="liveOpenAmazon">🔗 Open today's itinerary</button></div>
  <div id="liveSummary" class="stats" style="margin-top:14px"></div><div id="liveList" class="list" style="margin-top:14px"></div></div>`;main.appendChild(s);
  const hs=document.createElement('section');hs.id='driverHistory';hs.className='page';hs.innerHTML=`
  <div class="card">
@@ -146,6 +146,7 @@ function ensureUI(){
  document.getElementById('liveOpenAmazon').onclick=()=>{const st=window._coachStation||'DJX3',url=itineraryUrl(st);localStorage.setItem('coach_itinerary_'+st,url);window.open(url,'_blank','noopener')};
  for(const st of Object.keys(STATIONS))localStorage.setItem('coach_itinerary_'+st,itineraryUrl(st));
  document.getElementById('liveSettings').onclick=async()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,v=prompt(st+' route deadline (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_deadline_'+st,v);render()}};
+ document.getElementById('liveStartSettings').onclick=()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,v=prompt(st+' assumed Stop 5 time until real route timing is available (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_stop5_'+st,v);render()}};
  renderDriverHistory();
 }
 function savedRouteForHistory(h,name){
