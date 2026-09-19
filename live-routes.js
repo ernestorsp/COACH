@@ -112,17 +112,56 @@ function predict(r,deadline,st){
 function ensureUI(){
  if(document.getElementById('live'))return;
  const app=document.getElementById('app'),nav=document.querySelector('.nav'),main=document.querySelector('main.shell');if(!app||!nav||!main)return;
- nav.style.gridTemplateColumns='repeat(5,1fr)';
+ nav.style.gridTemplateColumns='repeat(6,1fr)';
  const b=document.createElement('button');b.dataset.page='live';b.innerHTML='<span class="ni">📊</span><span>Live</span>';const anchor=document.getElementById('liveNavAnchor');if(anchor)anchor.after(b);else nav.appendChild(b);
+ const historyBtn=document.createElement('button');historyBtn.dataset.page='driverHistory';historyBtn.innerHTML='<span class="ni">📈</span><span>History</span>';const driversBtn=nav.querySelector('button[data-page="drivers"]');if(driversBtn)driversBtn.after(historyBtn);else nav.appendChild(historyBtn);
  const s=document.createElement('section');s.id='live';s.className='page';s.innerHTML=`
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
  <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveOpenAmazon">🔗 Open today's itinerary</button></div>
  <div id="liveSummary" class="stats" style="margin-top:14px"></div><div id="liveList" class="list" style="margin-top:14px"></div></div>`;main.appendChild(s);
- document.querySelectorAll('.nav button').forEach(x=>x.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nav button').forEach(q=>q.classList.remove('on'));document.getElementById(x.dataset.page)?.classList.add('on');x.classList.add('on')}));
+ const hs=document.createElement('section');hs.id='driverHistory';hs.className='page';hs.innerHTML=`
+ <div class="card">
+   <div class="row between"><div><h3 class="sectionTitle"><span class="sectionIcon">📈</span>Driver Delivery History</h3><div class="muted" style="margin-top:6px">Shows what COACH has actually saved for each driver and whether each route can be used for ETA.</div></div><span class="pill">2-name matching</span></div>
+   <div class="field" style="margin-top:16px"><input id="historyDriverSearch" type="search" placeholder="Search driver..." autocomplete="off"></div>
+   <div id="historyDriverChoices" class="row" style="margin:0 0 14px"></div>
+   <div id="historyDriverSummary"></div>
+   <div id="historyDriverList" class="list" style="margin-top:14px"></div>
+ </div>`;main.appendChild(hs);
+ document.querySelectorAll('.nav button').forEach(x=>x.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nav button').forEach(q=>q.classList.remove('on'));document.getElementById(x.dataset.page)?.classList.add('on');x.classList.add('on');if(x.dataset.page==='driverHistory')renderDriverHistory()}));
+ document.getElementById('historyDriverSearch')?.addEventListener('input',renderDriverHistory);
  document.querySelectorAll('.liveStation').forEach(x=>x.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window._coachStation=x.dataset.st;document.querySelectorAll('.liveStation').forEach(y=>{const active=y.dataset.st===window._coachStation;y.classList.toggle('blue',active);y.classList.toggle('soft',!active)});requestAnimationFrame(render)});
  document.getElementById('liveOpenAmazon').onclick=()=>{const st=window._coachStation||'DJX3',url=itineraryUrl(st);localStorage.setItem('coach_itinerary_'+st,url);window.open(url,'_blank','noopener')};
  for(const st of Object.keys(STATIONS))localStorage.setItem('coach_itinerary_'+st,itineraryUrl(st));
  document.getElementById('liveSettings').onclick=async()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,v=prompt(st+' route deadline (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_deadline_'+st,v);render()}};
+ renderDriverHistory();
+}
+function savedRouteForHistory(h,name){
+ return SAVED_ROUTES.find(x=>x.dateKey===h.day&&twoNamesMatch(name||h.driverName,x.driverName)&&(!x.station||String(x.station).toUpperCase()===String(h.station||'').toUpperCase()));
+}
+function historyMergedRow(h,name){
+ const sr=savedRouteForHistory(h,name),sm=Number(h.stop5AtMinutes),rm=Number(sr?.stop5AtMinutes),stop5=Number.isFinite(sm)?sm:(Number.isFinite(rm)?rm:null),stop5Text=h.stop5AtText||sr?.stop5AtText||null;
+ const merged={...h,stop5AtMinutes:stop5,stop5AtText,totalPackages:Number(h.totalPackages)||Number(sr?.totalPackages)||0,packagesPerStop:Number(h.packagesPerStop)||Number(sr?.packagesPerStop)||0};
+ const dur=routeDuration(merged),valid=!!(h.completed&&dur);
+ let reason='Ready for ETA history';
+ if(!h.completed)reason='Not marked completed';
+ else if(!Number.isFinite(Number(stop5)))reason='Stop 5 real time missing';
+ else if(!h.finishedAtMs)reason='Finish time missing';
+ else if(!dur)reason='Duration invalid';
+ return{h:merged,sr,dur,valid,reason};
+}
+function renderDriverHistory(){
+ const choices=document.getElementById('historyDriverChoices'),list=document.getElementById('historyDriverList'),summary=document.getElementById('historyDriverSummary');if(!choices||!list||!summary)return;
+ const q=String(document.getElementById('historyDriverSearch')?.value||'').trim().toLowerCase();
+ const names=[];for(const h of HISTORY){const n=String(h.driverName||'').trim();if(n&&!names.some(x=>twoNamesMatch(x,n)))names.push(n)}
+ names.sort((a,b)=>a.localeCompare(b));const filtered=names.filter(n=>!q||n.toLowerCase().includes(q));
+ let selected=window._coachHistoryDriver||filtered[0]||names[0]||'';if(selected&&!names.some(n=>twoNamesMatch(n,selected)))selected=filtered[0]||names[0]||'';window._coachHistoryDriver=selected;
+ choices.innerHTML=filtered.slice(0,80).map(n=>`<button class="btn ${selected&&twoNamesMatch(n,selected)?'blue':'soft'} coachHistoryDriver" data-name="${esc(n)}" style="padding:8px 11px">${esc(n)}</button>`).join('')||'<span class="muted">No drivers found in history.</span>';
+ choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{window._coachHistoryDriver=b.dataset.name;renderDriverHistory()});
+ if(!selected){summary.innerHTML='';list.innerHTML='<div class="empty">No driver history has been saved yet.</div>';return}
+ const rows=HISTORY.filter(h=>twoNamesMatch(selected,h.driverName)).sort((a,b)=>String(b.day||'').localeCompare(String(a.day||''))).slice(0,20).map(h=>historyMergedRow(h,selected));
+ const valid=rows.filter(x=>x.valid).length,completed=rows.filter(x=>x.h.completed).length,aliases=[...new Set(rows.map(x=>x.h.driverName).filter(Boolean))];
+ summary.innerHTML=`<div class="stats"><div class="card stat"><span class="label">SAVED ROUTES</span><b>${rows.length}</b></div><div class="card stat"><span class="label">COMPLETED</span><b>${completed}</b></div><div class="card stat"><span class="label">VALID FOR ETA</span><b>${valid}</b></div></div><div class="muted" style="margin:8px 2px 0"><b>Matched names:</b> ${aliases.map(esc).join(' · ')||'—'}</div>`;
+ list.innerHTML=rows.length?rows.map(x=>{const h=x.h,finish=h.performanceEndAt||h.lastDelivery||(h.finishedAtMs?new Date(Number(h.finishedAtMs)).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):null),status=x.valid?'<span class="pill" style="background:#dcfce7;color:#15803d">✓ ETA READY</span>':'<span class="pill" style="background:#fff3cd;color:#9a6700">⚠ '+esc(x.reason)+'</span>';return `<div class="item" style="border:1px solid ${x.valid?'#86d7a5':'#e8c76d'}"><div class="row between"><div><div class="drivername">${esc(h.driverName||selected)}</div><div class="muted">${esc(h.day||'Date ?')} · ${esc(h.station||'?')} · ${esc(h.route||'CX ?')}</div></div>${status}</div><div class="row" style="margin-top:10px;gap:8px"><span class="pill">Stops: ${Number(h.totalStops)||0}</span><span class="pill">Stop 5: ${esc(h.stop5AtText||'MISSING')}</span><span class="pill">Finish: ${esc(finish||'MISSING')}</span><span class="pill">Saved route: ${x.sr?'YES':'NO'}</span>${x.dur?`<span class="pill">Duration: ${Math.round(x.dur)} min</span>`:''}</div><div class="muted" style="margin-top:9px">Completed: ${h.completed?'YES':'NO'} · Last live done: ${Number(h.liveDone)||0}/${Number(h.totalStops)||0} · Packages: ${Number(h.totalPackages)||0}</div></div>`}).join(''):'<div class="empty">No saved history for this driver.</div>';
 }
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function rescueOverrideKey(st,r){return 'coach_not_rescue_'+st+'_'+driverKey(r.name)}
@@ -194,5 +233,5 @@ function renderRescue(st,deadline){
  document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Rescue drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Active rescue stops</span><b>${rows.reduce((a,r)=>a+Math.max(0,Number(r.total||0)-Number(r.done||0)),0)}</b></div><div class="card stat"><span class="label">History</span><b>20 days</b></div>`;
  document.getElementById('liveList').innerHTML=calc.length?calc.map(r=>{const finished=Number(r.total)>0&&Number(r.done)>=Number(r.total),routes=(r.routes||[r.route]).join(', ');return `<div class="item" style="${finished?'border:2px solid #22c55e;background:#f0fdf4':'border:2px solid #8b5cf6;background:#faf5ff'}"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">🚑 RESCUE · ${esc(routes)} · ${st}</div></div><span class="pill">${r.done||0}/${r.total||0} stops</span></div><div class="addr" style="margin-top:10px">${finished?'RESCUE FINISH: '+esc(r.lastDelivery||'Completed'):'RESCUE ETA: '+(r._p.eta?fmtMin(r._p.eta):'Learning...')}</div><div class="muted">Pending ${Math.max(0,Number(r.total||0)-Number(r.done||0))} stops · Pace ${r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'} · ${r._p.historyCount}/20 previous rescue days</div></div>`}).join(''):'<div class="empty">No rescue drivers detected. Drivers with more than one CX will appear here automatically.</div>';
 }
-async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=(LIVE[st]||[]).filter(r=>String(r.day||'')===todayEastern());const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'routes'),snap=>{SAVED_ROUTES=snap.docs.map(x=>({id:x.id,...x.data()}));render()});onSnapshot(collection(db,'liveRescues'),snap=>{RESCUES={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(RESCUES[d.station])RESCUES[d.station].push(d)});render()})}setInterval(render,15000)}
+async function start(){ensureUI();render();const db=await dbReady();if(db){onSnapshot(collection(db,'liveRoutes'),snap=>{LIVE={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(LIVE[d.station])LIVE[d.station].push(d)});const st=window._coachStation||'DJX3',rows=(LIVE[st]||[]).filter(r=>String(r.day||'')===todayEastern());const newest=Math.max(0,...rows.map(r=>Number(r.capturedMs)||0));const e=document.getElementById('liveUpdated');if(e)e.textContent=newest?'Updated '+new Date(newest).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'Waiting for Chrome data';render()});onSnapshot(collection(db,'driverRouteHistory'),snap=>{HISTORY=snap.docs.map(x=>({id:x.id,...x.data()}));render();renderDriverHistory()});onSnapshot(collection(db,'routes'),snap=>{SAVED_ROUTES=snap.docs.map(x=>({id:x.id,...x.data()}));render();renderDriverHistory()});onSnapshot(collection(db,'liveRescues'),snap=>{RESCUES={DJX3:[],DJX4:[]};snap.forEach(x=>{const d=x.data();if(RESCUES[d.station])RESCUES[d.station].push(d)});render()})}setInterval(render,15000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
