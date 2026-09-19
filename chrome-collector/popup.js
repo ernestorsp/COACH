@@ -1,1 +1,11 @@
-const out=document.getElementById('out'),key=document.getElementById('key');chrome.storage.local.get(['collectorKey'],x=>key.value=x.collectorKey||'');document.getElementById('save').onclick=()=>chrome.storage.local.set({collectorKey:key.value.trim()},()=>out.textContent='Collector key saved.');document.getElementById('scan').onclick=async()=>{const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.id)return;chrome.tabs.sendMessage(tab.id,{type:'COACH_SCAN'},r=>{if(chrome.runtime.lastError){out.textContent=chrome.runtime.lastError.message;return}out.textContent=JSON.stringify(r,null,2)})};
+const out=document.getElementById('out'),key=document.getElementById('key');
+chrome.storage.local.get(['collectorKey'],x=>key.value=x.collectorKey||'');
+document.getElementById('save').onclick=()=>chrome.storage.local.set({collectorKey:key.value.trim()},()=>out.textContent='Collector key saved.');
+document.getElementById('scan').onclick=async()=>{
+ const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.id)return;
+ const run=()=>chrome.tabs.sendMessage(tab.id,{type:'COACH_SCAN'},r=>{if(chrome.runtime.lastError){out.textContent=chrome.runtime.lastError.message;return}out.textContent=JSON.stringify(r,null,2)});
+ chrome.tabs.sendMessage(tab.id,{type:'COACH_SCAN'},r=>{
+   if(!chrome.runtime.lastError){out.textContent=JSON.stringify(r,null,2);return}
+   chrome.scripting.executeScript({target:{tabId:tab.id},files:['collector.js']},()=>{if(chrome.runtime.lastError){out.textContent='Open an Amazon itineraries page and try again. '+chrome.runtime.lastError.message;return}setTimeout(run,150)});
+ });
+};
