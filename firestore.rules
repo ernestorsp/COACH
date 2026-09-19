@@ -81,6 +81,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /liveRescues/{docId} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
+    match /rescueHistory/{docId} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
