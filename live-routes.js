@@ -78,8 +78,9 @@ function historyFor(r,st){
  return{current:mergedCurrent,prior,key:driverKey(historyName)||key,routeLoaded:!!savedRoute||Number(mergedCurrent?.routeLoadedMs)>0,savedRoute};
 }
 function predict(r,deadline,st){
- const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
+ const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current}=historyFor(r,st);
  const matchedPrior=completedPriorHistory(st,String(r.day||easternDay()),r.name);
+ const prior=usablePriorHistory(st,String(r.day||easternDay()),r.name);
  const stop5=Number(current?.stop5AtMinutes),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
@@ -98,6 +99,11 @@ function predict(r,deadline,st){
    histDur=sw?sd/sw:null;
  }
  let eta=null,model='Live pace';
+ // Every completed matching route can help: prefer its saved recent pace, then Amazon average.
+ // This lets 1 route work as 1 route; if 30 exist, completedPriorHistory already limits us to the latest 20.
+ let histPace=null;
+ const paceRows=matchedPrior.map(h=>Number(h.recentPace)||Number(h.amazonAvg)||0).filter(x=>x>0&&x<100);
+ if(paceRows.length){let sw=0,sp=0;paceRows.forEach((p,i)=>{const w=Math.max(.55,1-i*.025);sp+=p*w;sw+=w});histPace=sw?sp/sw:null}
  if(histDur&&Number.isFinite(stop5)){
    let predictedDur=histDur;
    if(currentPace>0&&done>8){
@@ -107,11 +113,13 @@ function predict(r,deadline,st){
    }
    eta=stop5+predictedDur;model='Personal history';
  }else{
-   const pace=currentPace||Number(r.recentPace||r.amazonAvg||0);
-   eta=pace>0?nowM+Math.max(0,total-done)/pace*60:null;
+   const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0);
+   // Do not invent a finish time before the route has actually begun.
+   eta=done>0&&pace>0?nowM+Math.max(0,total-done)/pace*60:null;
+   if(histPace)model='Personal history';
  }
- const pace=currentPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
- return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:prior.length,model,packages:pkg,packagesPerStop:pps};
+ const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
+ return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps};
 }
 function ensureUI(){
  if(document.getElementById('live'))return;
