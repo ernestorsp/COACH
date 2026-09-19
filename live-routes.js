@@ -127,6 +127,19 @@ function getData(st){
  return [...byName.values()];
 }
 let rendering=false;
+function ensureLiveEffects(){
+ if(document.getElementById('coach-live-effects-v2'))return;
+ const st=document.createElement('style');st.id='coach-live-effects-v2';
+ st.textContent=`
+ .coachRouteProgress{position:relative!important;overflow:hidden!important;isolation:isolate}
+ .coachRouteProgress>*{position:relative;z-index:2}
+ .coachRouteActive:after{content:"";display:block!important;position:absolute!important;z-index:1!important;top:-80%!important;left:-42%!important;width:28%!important;height:270%!important;pointer-events:none!important;background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0.08) 25%,rgba(255,255,255,0.92) 48%,rgba(255,255,255,0.18) 62%,transparent 100%)!important;box-shadow:0 0 24px rgba(255,255,255,.55);transform:rotate(8deg);animation:coachLiveSweep 2.4s linear infinite!important}
+ @keyframes coachLiveSweep{0%{left:-42%;opacity:0}8%{opacity:1}78%{opacity:1}100%{left:125%;opacity:0}}
+ `;
+ document.head.appendChild(st);
+}
+ensureLiveEffects();
+
 function render(){
  if(rendering)return; rendering=true;
  ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline;
