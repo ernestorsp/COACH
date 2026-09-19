@@ -26,6 +26,86 @@
 .sectionTitle{letter-spacing:-.25px}
 .nav button{transition:color .18s ease,background .18s ease}
 .nav button.on{background:linear-gradient(180deg,rgba(8,126,229,.05),rgba(8,126,229,0))}
+
+/* LIVE-style visual refresh — presentation only */
+#home,#drivers,#database,#users{max-width:100%}
+#home>.card,#drivers>.card,#database>.card,#users>.card{
+  background:#fff;
+  border:1px solid #cfe0ee;
+  border-radius:24px;
+  box-shadow:0 12px 30px rgba(15,61,104,.07);
+}
+#home>.stats{gap:14px;margin-bottom:16px}
+#home>.stats>.card{
+  min-height:132px;
+  border-radius:22px;
+  padding:22px;
+  box-shadow:none;
+  background:linear-gradient(135deg,#fff 0%,#fbfdff 100%);
+}
+#home>.stats>.card b{font-size:38px;margin-top:14px}
+#home>.stats>.card .label{font-size:11px;letter-spacing:.55px}
+#home>.card:not(.stat),#drivers>.card,#database>.card,#users>.card{padding:20px}
+#home .sectionTitle,#drivers .sectionTitle,#database .sectionTitle,#users .sectionTitle{
+  font-size:21px;font-weight:900;letter-spacing:-.45px;
+}
+#home .sectionIcon,#drivers .sectionIcon,#database .sectionIcon,#users .sectionIcon{
+  width:38px;height:38px;border-radius:12px;background:#eaf5ff;
+}
+#pendingList,#recentList,#driversList,#complaintsList,#usersList{gap:12px}
+#pendingList .item,#recentList .item,#driversList .item,#complaintsList .item,#usersList .item{
+  position:relative;
+  border:1px solid #d3e3ef;
+  border-radius:18px;
+  padding:16px;
+  background:#fff;
+  box-shadow:none;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+#pendingList .item:hover,#recentList .item:hover,#driversList .item:hover,#complaintsList .item:hover,#usersList .item:hover{
+  border-color:#acd3ef;
+  box-shadow:0 8px 20px rgba(8,126,229,.07);
+  transform:translateY(-1px);
+}
+#driversList .drivername,#pendingList .drivername{font-size:16px;font-weight:900;color:#0565b9}
+#complaintsList .addr,#recentList .addr,#usersList .addr{font-size:15px}
+#drivers .btn.soft,#database .btn.soft,#users .btn.soft,#home .btn.soft{
+  background:#eaf5ff;color:#0565b9;border-radius:13px;
+}
+#drivers .btn.blue,#database .btn.blue,#users .btn.blue{
+  border-radius:15px;padding:12px 17px;
+}
+#drivers .field input,#database .field input,#home .field select{
+  min-height:54px;border-radius:16px;background:#fff;border:1px solid #c9ddeb;padding:0 15px;
+}
+#drivers .field input:focus,#database .field input:focus,#home .field select:focus{
+  border-color:#4aa9ee;box-shadow:0 0 0 4px rgba(8,126,229,.08);outline:none;
+}
+#home .empty,#drivers .empty,#database .empty,#users .empty{
+  min-height:92px;display:grid;place-items:center;border-radius:17px;background:#fbfdff;
+}
+.sheet{
+  border:1px solid #d4e4ef;
+  background:#fff;
+}
+.sheet h3{font-size:21px;letter-spacing:-.35px}
+.sheet .field input,.sheet .field textarea,.sheet .field select{
+  border-color:#cbddea;background:#fbfdff;
+}
+.sheet .field input:focus,.sheet .field textarea:focus,.sheet .field select:focus{
+  border-color:#4aa9ee;box-shadow:0 0 0 4px rgba(8,126,229,.08);
+}
+.top{
+  background:rgba(248,251,255,.78);
+  border-radius:22px;
+}
+.nav{
+  border:1px solid #d8e6f1;border-bottom:0;
+  box-shadow:0 -12px 30px rgba(15,61,104,.07);
+}
+.nav button{min-height:72px}
+.nav button.on{color:#087ee5;background:#f4faff}
+
 @media(max-width:700px){.shell{padding:12px 12px calc(98px + env(safe-area-inset-bottom))}.brand img{width:54px;height:54px}.brand h1{font-size:22px}.topActions .pill{display:none}.topActions .btn{padding:9px 11px;font-size:12px}.stats{grid-template-columns:repeat(3,1fr);gap:8px}.stat{min-height:92px;padding:13px}.stat b{font-size:27px}.label{font-size:9px}.card{border-radius:19px;padding:14px;margin-bottom:12px}.item{padding:12px}.fab{width:58px;height:58px;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));font-size:30px}.nav{min-height:68px}.nav button{font-size:10px}.nav .ni{font-size:19px}.sheet{border-radius:24px 24px 0 0;padding:16px 14px calc(18px + env(safe-area-inset-bottom))}.login{padding:16px}.loginbox{padding:24px 18px}.loginbox img{width:125px;height:125px}.userActions{width:100%;justify-content:flex-end}}
 @media(max-width:430px){.stats{grid-template-columns:1fr 1fr}.stat:last-child{grid-column:1/-1}.brand p{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 </style>
