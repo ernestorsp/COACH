@@ -112,7 +112,7 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
       if(!routes.length)continue;
       const route=routes[0],isRescue=routes.length>1,name=String(r.name||'').slice(0,120),driverKey=liveDriverKey(name),done=Math.max(0,Number(r.done)||0),total=Math.max(0,Number(r.total)||0),historyId=station+'_'+day+'_'+driverKey;
       const lastDelivery=String(r.lastDelivery||'').slice(0,30)||null,lastDeliveryMinutes=clockMinutes12(lastDelivery);
-      const clean={station,day,route,routes,routeCount:routes.length,isRescue,name,driverKey,historyId,done,total,amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,capturedAt,capturedMs,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+      const clean={station,day,route,routes,routeCount:routes.length,isRescue,name,driverKey,historyId,done,total,amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,deliveredPackages:Number.isFinite(Number(r.deliveredPackages))?Math.max(0,Number(r.deliveredPackages)):null,totalPackages:Number.isFinite(Number(r.totalPackages))?Math.max(0,Number(r.totalPackages)):null,capturedAt,capturedMs,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
       if(isRescue){
         batch.set(db.doc('liveRescues/'+station+'_'+driverKey),clean,{merge:true});
         batch.set(db.doc('liveRoutes/'+station+'_RESCUE_'+driverKey),clean,{merge:true});
