@@ -8,8 +8,8 @@ function scan(){
    const stopLine=block.find(x=>/\b\d+\s*\/\s*\d+\s+stops\b/i.test(x));if(!stopLine)continue;
    const sm=stopLine.match(/(\d+)\s*\/\s*(\d+)\s+stops/i),joined=block.join(' ');
    let name=before.slice().reverse().find(x=>x.length>3&&!/DAs\/DPs|Route|stops|deliveries|Station|Progress/i.test(x)&&!/^\d/.test(x))||'';
-   const avg=(joined.match(/Avg:\s*(\d+(?:\.\d+)?)\s*stops\/hour/i)||[])[1],pace=(joined.match(/Pace:\s*(\d+(?:\.\d+)?)\s*stops\/last hour/i)||[])[1],last=(joined.match(/Last:\s*Delivery at\s*([^\s]+)/i)||[])[1],projected=(joined.match(/Projected RTS:\s*([^\s]+)/i)||[])[1];
-   const isRescue=routes.length>1||/[,…]|\.\.\./.test(routeLine);rows.push({name,route:routes[0],routes,routeCount:routes.length,isRescue,done:+sm[1],total:+sm[2],amazonAvg:avg?+avg:null,recentPace:pace?+pace:null,lastDelivery:last||null,amazonProjectedRTS:projected||null});
+   const avg=(joined.match(/Avg:\s*(\d+(?:\.\d+)?)\s*stops\/hour/i)||[])[1],pace=(joined.match(/Pace:\s*(\d+(?:\.\d+)?)\s*stops\/last hour/i)||[])[1],last=(joined.match(/Last:\s*Delivery at\s*([^\s]+)/i)||[])[1],projected=(joined.match(/Projected RTS:\s*([^\s]+)/i)||[])[1],deliveryMatch=joined.match(/(\d+)\s*\/\s*(\d+)\s+deliveries\b/i);
+   const isRescue=routes.length>1||/[,…]|\.\.\./.test(routeLine);rows.push({name,route:routes[0],routes,routeCount:routes.length,isRescue,done:+sm[1],total:+sm[2],amazonAvg:avg?+avg:null,recentPace:pace?+pace:null,lastDelivery:last||null,amazonProjectedRTS:projected||null,deliveredPackages:deliveryMatch?+deliveryMatch[1]:null,totalPackages:deliveryMatch?+deliveryMatch[2]:null});
  }
  return{station:station(),url:location.href,capturedAt:new Date().toISOString(),drivers:rows}
 }
