@@ -48,6 +48,29 @@ function usablePriorHistory(st,day,driverName){
    return Number.isFinite(sm)?{...h,stop5AtMinutes:sm,stop5AtText:sr?.stop5AtText||h.stop5AtText,totalPackages:Number(h.totalPackages)||Number(sr?.totalPackages)||0,packagesPerStop:Number(h.packagesPerStop)||Number(sr?.packagesPerStop)||0}:h;
  }).filter(h=>routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
 }
+function historyHourlyProfile(rows){
+ const buckets=Array.from({length:24},()=>[]),all=[];
+ for(const h of rows||[]){
+   const a=Array.isArray(h.paceSamples)?h.paceSamples.slice().filter(x=>Number.isFinite(Number(x?.ms))&&Number.isFinite(Number(x?.done))).sort((x,y)=>Number(x.ms)-Number(y.ms)):[];
+   for(let i=1;i<a.length;i++){
+     const x=a[i-1],y=a[i],dt=(Number(y.ms)-Number(x.ms))/3600000,ds=Number(y.done)-Number(x.done);
+     if(dt<=0||dt>1.5||ds<0)continue;
+     const p=ds/dt;if(p<=0||p>100)continue;
+     const hour=Math.floor(easternClock((Number(x.ms)+Number(y.ms))/2)/60);
+     buckets[hour].push(p);all.push(p);
+   }
+ }
+ const avg=v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+ return{hours:buckets.map(avg),overall:avg(all),sampleCount:all.length};
+}
+function intelligentHistoryPace(rows,minute,fallback){
+ const p=historyHourlyProfile(rows),hour=Math.floor((Number(minute)||0)/60)%24;
+ const nearby=[p.hours[hour],p.hours[(hour+23)%24],p.hours[(hour+1)%24]].filter(Number.isFinite);
+ const timePace=nearby.length?nearby.reduce((a,b)=>a+b,0)/nearby.length:null;
+ const base=Number.isFinite(p.overall)?p.overall:(Number(fallback)||0);
+ const pace=timePace&&base?timePace*.60+base*.40:(timePace||base);
+ return{pace,profile:p,timePace};
+}
 function historyFor(r,st){
  const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay()),route=String(r.route||'').toUpperCase();
  const stationHistory=HISTORY.filter(h=>h.station===st);
@@ -99,6 +122,9 @@ function predict(r,deadline,st){
    histDur=sw?sd/sw:null;
  }
  let eta=null,model='Live pace';
+ // Learn time-of-day behavior from whatever minute-by-minute or pasted-route samples exist.
+ // If only partial progress was observed (for example the first 60 stops), those observations still help.
+ const smart= intelligentHistoryPace(matchedPrior,nowM,histDur&&total>5?Math.max(0,total-5)/(histDur/60):0);
  // Every completed matching route can help: prefer its saved recent pace, then Amazon average.
  // This lets 1 route work as 1 route; if 30 exist, completedPriorHistory already limits us to the latest 20.
  let histPace=null;
@@ -111,7 +137,15 @@ function predict(r,deadline,st){
      const actualFrac=(done-5)/Math.max(1,total-5),expectedFrac=elapsed/histDur,perf=expectedFrac>0?clamp(actualFrac/expectedFrac,.70,1.35):1;
      predictedDur=histDur/Math.pow(perf,.65);
    }
-   eta=stop5+predictedDur;model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
+   // Blend route-size/package duration with the driver's observed pace for this time of day.
+     // As more hourly samples accumulate, this becomes driver- and hour-specific; with no samples it
+     // falls back cleanly to stops + packages + total working duration.
+     if(smart.pace>0&&smart.profile.sampleCount>=2){
+       const smartDur=Math.max(0,total-5)/smart.pace*60;
+       const confidence=clamp(smart.profile.sampleCount/30,.15,.55);
+       predictedDur=predictedDur*(1-confidence)+smartDur*confidence;
+     }
+     eta=stop5+predictedDur;model=smart.profile.sampleCount>=2?(usingAssumedStop5?'Smart history · assumed Stop 5':'Smart history'):(usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history');
  }else{
    const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0);
    // Before real progress/route timing is available, estimate from the station's editable assumed Stop 5.
@@ -122,7 +156,7 @@ function predict(r,deadline,st){
  // Old history rows may contain a bad recentPace (for example 1.0/h), so never let that override
  // a valid Stop-5-to-finish duration reconstructed from the driver's saved route history.
  const durationPace=histDur&&total>5?Math.max(0,total-5)/(histDur/60):0;
- const pace=currentPace||durationPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
+ const pace=currentPace||(smart.pace>0?smart.pace:0)||durationPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
  return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps,usingAssumedStop5,stop5UsedText:usingAssumedStop5?assumedStop5Text:(current?.stop5AtText||null)};
 }
 function ensureUI(){
@@ -224,7 +258,10 @@ function renderDriverHistoryDetail(){
    if(!route||!Number.isFinite(s5m)||!Number.isFinite(fm)||!stops)return alert('COACH could not safely detect all required fields. Nothing was changed.');
    const day=String(h.day||h.dateKey||''),p=day.split('-').map(Number);if(p.length!==3||p.some(n=>!Number.isFinite(n)))return alert('This route date is invalid.');
    const base=new Date(Date.UTC(p[0],p[1]-1,p[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
-   try{const db=await dbReady();const patch={route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),historyManualEdit:true,historyManualEditAt:Date.now(),historyRepairSource:'pasted-full-route'};if(packages>0)patch.totalPackages=packages;await updateDoc(doc(db,'driverRouteHistory',h.id),patch);renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
+   // A pasted full route is richer than just start/finish: preserve every actual stop time we can read.
+   // The ETA model can then learn this driver's pace at 1 PM vs 4 PM vs 7 PM, etc.
+   const timed=actual.slice().sort((a,b)=>a.m-b.m||a.n-b.n),paceSamples=timed.map(x=>({ms:base.getTime()+x.m*60000,done:x.n,total:Number(stops),packages:null,totalPackages:packages||null,source:'pasted-route'}));
+   try{const db=await dbReady();const patch={route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),historyManualEdit:true,historyManualEditAt:Date.now(),historyRepairSource:'pasted-full-route',paceSamples};if(packages>0)patch.totalPackages=packages;await updateDoc(doc(db,'driverRouteHistory',h.id),patch);renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
  });
  list.querySelectorAll('.historyDetailEdit').forEach(btn=>btn.onclick=async()=>{
    const h=rows[Number(btn.dataset.i)],sr=findSaved(h);if(!h?.id)return alert('This record has no editable document ID.');
