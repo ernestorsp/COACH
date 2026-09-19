@@ -113,7 +113,12 @@ function isRescueRow(st,r){
 }
 function getData(st){
  const normal=LIVE[st]||[],rescues=RESCUES[st]||[],byName=new Map();
- for(const r of normal)byName.set(driverKey(r.name),r);
+ for(const r of normal){
+   const k=driverKey(r.name),old=byName.get(k);
+   const rMulti=!!r.isRescue||Number(r.routeCount||0)>1||(Array.isArray(r.routes)&&r.routes.length>1);
+   const oldMulti=old&&(!!old.isRescue||Number(old.routeCount||0)>1||(Array.isArray(old.routes)&&old.routes.length>1));
+   if(!old||rMulti||!oldMulti)byName.set(k,r);
+ }
  for(const r of rescues){
    const k=driverKey(r.name),old=byName.get(k);
    if(old)byName.set(k,{...old,...r,routes:(r.routes&&r.routes.length?r.routes:old.routes),routeCount:Number(r.routeCount||old.routeCount||0),isRescue:!!(r.isRescue||old.isRescue)});
