@@ -107,10 +107,19 @@ function ensureUI(){
 }
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function rescueOverrideKey(st,r){return 'coach_not_rescue_'+st+'_'+driverKey(r.name)}
-function isRescueRow(st,r){return !!r.isRescue&&!localStorage.getItem(rescueOverrideKey(st,r))}
+function isRescueRow(st,r){
+ const multi=!!r.isRescue||Number(r.routeCount||0)>1||(Array.isArray(r.routes)&&r.routes.length>1);
+ return multi&&!localStorage.getItem(rescueOverrideKey(st,r));
+}
 function getData(st){
- const normal=LIVE[st]||[],rescues=RESCUES[st]||[],seen=new Set(normal.map(r=>driverKey(r.name)));
- return normal.concat(rescues.filter(r=>!seen.has(driverKey(r.name))));
+ const normal=LIVE[st]||[],rescues=RESCUES[st]||[],byName=new Map();
+ for(const r of normal)byName.set(driverKey(r.name),r);
+ for(const r of rescues){
+   const k=driverKey(r.name),old=byName.get(k);
+   if(old)byName.set(k,{...old,...r,routes:(r.routes&&r.routes.length?r.routes:old.routes),routeCount:Number(r.routeCount||old.routeCount||0),isRescue:!!(r.isRescue||old.isRescue)});
+   else byName.set(k,r);
+ }
+ return [...byName.values()];
 }
 let rendering=false;
 function render(){
