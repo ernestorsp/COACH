@@ -1,7 +1,15 @@
 import{getApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';
 import{getFirestore,collection,onSnapshot}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
-const STATIONS={DJX3:{deadline:'21:00'},DJX4:{deadline:'20:00'}};
+const STATIONS={DJX3:{deadline:'21:00',serviceAreaId:'c599503f-5de9-4035-8532-125fcbc09b03'},DJX4:{deadline:'20:00',serviceAreaId:'fbf527d0-7ba7-4768-b452-ef8522843889'}};
+function todayEastern(){
+ const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),o=Object.fromEntries(p.map(x=>[x.type,x.value]));
+ return o.year+'-'+o.month+'-'+o.day;
+}
+function itineraryUrl(st){
+ const cfg=STATIONS[st]||STATIONS.DJX3,u=new URL('https://logistics.amazon.com/operations/execution/itineraries');
+ u.searchParams.set('provider','ALL_DRIVERS');u.searchParams.set('selectedDay',todayEastern());u.searchParams.set('serviceAreaId',cfg.serviceAreaId);return u.toString();
+}
 const sleep=m=>new Promise(r=>setTimeout(r,m));
 async function dbReady(){for(let i=0;i<60;i++){try{return getFirestore(getApp())}catch{}await sleep(100)}}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
@@ -98,11 +106,12 @@ function ensureUI(){
  const b=document.createElement('button');b.dataset.page='live';b.innerHTML='<span class="ni">📊</span><span>Live</span>';const anchor=document.getElementById('liveNavAnchor');if(anchor)anchor.after(b);else nav.appendChild(b);
  const s=document.createElement('section');s.id='live';s.className='page';s.innerHTML=`
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
- <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveUrls">🔗 Itinerary URLs</button></div>
+ <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveOpenAmazon">🔗 Open today's itinerary</button></div>
  <div id="liveSummary" class="stats" style="margin-top:14px"></div><div id="liveList" class="list" style="margin-top:14px"></div></div>`;main.appendChild(s);
  document.querySelectorAll('.nav button').forEach(x=>x.addEventListener('click',()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nav button').forEach(q=>q.classList.remove('on'));document.getElementById(x.dataset.page)?.classList.add('on');x.classList.add('on')}));
  document.querySelectorAll('.liveStation').forEach(x=>x.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window._coachStation=x.dataset.st;document.querySelectorAll('.liveStation').forEach(y=>{const active=y.dataset.st===window._coachStation;y.classList.toggle('blue',active);y.classList.toggle('soft',!active)});requestAnimationFrame(render)});
- document.getElementById('liveUrls').onclick=()=>{const st=window._coachStation||'DJX3';const current=localStorage.getItem('coach_itinerary_'+st)||'';const v=prompt(st+' itinerary URL',current);if(v===null)return;try{const u=new URL(v.trim());if(u.hostname!=='logistics.amazon.com'||!u.pathname.includes('/operations/execution/itineraries'))throw Error();localStorage.setItem('coach_itinerary_'+st,u.toString());alert(st+' itinerary URL saved.')}catch{alert('Please paste a valid logistics.amazon.com itineraries URL.')}};
+ document.getElementById('liveOpenAmazon').onclick=()=>{const st=window._coachStation||'DJX3',url=itineraryUrl(st);localStorage.setItem('coach_itinerary_'+st,url);window.open(url,'_blank','noopener')};
+ for(const st of Object.keys(STATIONS))localStorage.setItem('coach_itinerary_'+st,itineraryUrl(st));
  document.getElementById('liveSettings').onclick=async()=>{const st=window._coachStation||'DJX3',cur=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline,v=prompt(st+' route deadline (24-hour HH:MM)',cur);if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v||'')){localStorage.setItem('coach_deadline_'+st,v);render()}};
 }
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
