@@ -95,7 +95,7 @@ function ensureUI(){
  if(document.getElementById('live'))return;
  const app=document.getElementById('app'),nav=document.querySelector('.nav'),main=document.querySelector('main.shell');if(!app||!nav||!main)return;
  nav.style.gridTemplateColumns='repeat(5,1fr)';
- const b=document.createElement('button');b.dataset.page='live';b.innerHTML='<span class="ni">📊</span><span>Live</span>';nav.appendChild(b);
+ const b=document.createElement('button');b.dataset.page='live';b.innerHTML='<span class="ni">📊</span><span>Live</span>';const anchor=document.getElementById('liveNavAnchor');if(anchor)anchor.after(b);else nav.appendChild(b);
  const s=document.createElement('section');s.id='live';s.className='page';s.innerHTML=`
  <div class="card"><div class="row between"><h3 class="sectionTitle"><span class="sectionIcon">📊</span>LIVE Routes</h3><span class="muted" id="liveUpdated">Waiting for Chrome data</span></div>
  <div class="row" style="margin-top:14px"><button class="btn blue liveStation" data-st="DJX3">DJX3</button><button class="btn soft liveStation" data-st="DJX4">DJX4</button><button class="btn soft" id="liveSettings">⚙ Deadlines</button><button class="btn soft" id="liveUrls">🔗 Itinerary URLs</button></div>
