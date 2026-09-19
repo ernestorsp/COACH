@@ -153,39 +153,50 @@ function historyMergedRow(h,name){
 function renderDriverHistory(){
  const choices=document.getElementById('historyDriverChoices'),dates=document.getElementById('historyDateChoices'),list=document.getElementById('historyDriverList'),summary=document.getElementById('historyDriverSummary');if(!choices||!dates||!list||!summary)return;
  const q=String(document.getElementById('historyDriverSearch')?.value||'').trim().toLowerCase();
+ const fmtDay=k=>{const m=String(k).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return k;return new Date(Number(m[1]),Number(m[2])-1,Number(m[3])).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})};
 
- // Only show drivers that actually have driverRouteHistory records.
- const names=[];for(const h of HISTORY){const n=String(h.driverName||'').trim();if(n&&!names.some(x=>twoNamesMatch(x,n)))names.push(n)}
- names.sort((a,b)=>a.localeCompare(b));const filtered=names.filter(n=>!q||n.toLowerCase().includes(q));
+ // Driver list = only drivers with completed route history. Merge aliases by 2-name matching.
+ const groups=[];
+ for(const h of HISTORY.filter(x=>x.completed)){
+   const n=String(h.driverName||'').trim();if(!n)continue;
+   let g=groups.find(x=>twoNamesMatch(x.name,n));
+   if(!g){g={name:n,aliases:new Set(),rows:[]};groups.push(g)}
+   g.aliases.add(n);g.rows.push(h);
+ }
+ groups.forEach(g=>g.rows.sort((a,b)=>String(b.day||b.dateKey||'').localeCompare(String(a.day||a.dateKey||''))||Number(b.finishedAtMs||b.lastSeenMs||0)-Number(a.finishedAtMs||a.lastSeenMs||0)));
+ groups.sort((a,b)=>a.name.localeCompare(b.name));
+ const filtered=groups.filter(g=>!q||g.name.toLowerCase().includes(q)||[...g.aliases].some(a=>a.toLowerCase().includes(q)));
+
+ choices.style.display='grid';
+ choices.style.gridTemplateColumns='repeat(auto-fit,minmax(260px,1fr))';
+ choices.style.gap='10px';
+ choices.innerHTML=filtered.map((g,i)=>{const last=g.rows[0],days=[...new Set(g.rows.map(r=>String(r.day||r.dateKey||'')).filter(Boolean))];return `<button class="coachHistoryDriver item" data-i="${i}" style="text-align:left;cursor:pointer;border:1px solid #d6e5f1;background:#fff;padding:14px;border-radius:16px"><div class="row between"><div><div class="drivername">${esc(g.name)}</div><div class="muted" style="margin-top:4px">${g.rows.length} completed route${g.rows.length===1?'':'s'} · last ${esc(fmtDay(last?.day||last?.dateKey||''))}</div></div><span class="pill">▾ Details</span></div></button>`}).join('')||'<div class="empty" style="grid-column:1/-1">No drivers with completed route history yet.</div>';
+
+ choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{const g=filtered[Number(b.dataset.i)];if(!g)return;window._coachHistoryDriver=g.name;window._coachHistoryDay='';renderDriverHistory()});
+
  let selected=String(window._coachHistoryDriver||'').trim();
- if(!selected||!names.some(n=>twoNamesMatch(n,selected)))selected=filtered[0]||names[0]||'';
- window._coachHistoryDriver=selected;
+ let selectedGroup=groups.find(g=>twoNamesMatch(g.name,selected)||[...g.aliases].some(a=>twoNamesMatch(a,selected)));
+ if(!selectedGroup){summary.innerHTML='<div class="muted" style="margin-top:8px">Select a driver above to view the last 20 completed routes.</div>';dates.innerHTML='';list.innerHTML='';return}
+ selected=selectedGroup.name;window._coachHistoryDriver=selected;
 
- const visible=filtered.slice(0,100);
- choices.innerHTML=visible.map((n,i)=>`<button class="btn ${selected&&twoNamesMatch(n,selected)?'blue':'soft'} coachHistoryDriver" data-i="${i}" style="padding:8px 11px">${esc(n)}</button>`).join('')||'<span class="muted">No drivers with saved history yet.</span>';
- choices.querySelectorAll('.coachHistoryDriver').forEach(b=>b.onclick=()=>{const n=visible[Number(b.dataset.i)];if(n){window._coachHistoryDriver=n;window._coachHistoryDay='';renderDriverHistory()}});
+ const hist=selectedGroup.rows.slice(0,20);
+ const aliases=[...selectedGroup.aliases];
+ const mergedAll=hist.map(h=>historyMergedRow(h,selected));
+ const valid=mergedAll.filter(x=>x.valid).length;
+ summary.innerHTML=`<div class="stats"><div class="card stat"><span class="label">LAST ROUTES</span><b>${hist.length}</b></div><div class="card stat"><span class="label">ETA READY</span><b>${valid}</b></div><div class="card stat"><span class="label">ALIASES</span><b>${aliases.length}</b></div></div><div class="muted" style="margin:8px 2px 0"><b>${esc(selected)}</b> · ${aliases.map(esc).join(' · ')}</div>`;
 
- if(!selected){summary.innerHTML='';dates.innerHTML='';list.innerHTML='<div class="empty">No driverRouteHistory records have been saved yet.</div>';return}
-
- const hist=HISTORY.filter(h=>twoNamesMatch(selected,h.driverName)).sort((a,b)=>String(b.day||'').localeCompare(String(a.day||''))||Number(b.finishedAtMs||b.lastSeenMs||0)-Number(a.finishedAtMs||a.lastSeenMs||0));
- const saved=SAVED_ROUTES.filter(r=>twoNamesMatch(selected,r.driverName));
- const grouped=new Map();
- for(const h of hist){const day=String(h.day||h.dateKey||'Unknown date');if(!grouped.has(day))grouped.set(day,[]);grouped.get(day).push(h)}
- const dayKeys=[...grouped.keys()].sort((a,b)=>String(b).localeCompare(String(a)));
+ const dayMap=new Map();
+ for(const h of hist){const d=String(h.day||h.dateKey||'Unknown date');if(!dayMap.has(d))dayMap.set(d,[]);dayMap.get(d).push(h)}
+ const dayKeys=[...dayMap.keys()].sort((a,b)=>String(b).localeCompare(String(a))).slice(0,20);
  let selectedDay=String(window._coachHistoryDay||'');
  if(!dayKeys.includes(selectedDay))selectedDay=dayKeys[0]||'';
  window._coachHistoryDay=selectedDay;
 
- const mergedAll=hist.map(h=>historyMergedRow(h,selected));
- const valid=mergedAll.filter(x=>x.valid).length,completed=hist.filter(h=>h.completed).length,aliases=[...new Set(hist.map(x=>x.driverName).filter(Boolean))];
- summary.innerHTML=`<div class="stats"><div class="card stat"><span class="label">HISTORY RECORDS</span><b>${hist.length}</b></div><div class="card stat"><span class="label">COMPLETED</span><b>${completed}</b></div><div class="card stat"><span class="label">VALID FOR ETA</span><b>${valid}</b></div></div><div class="muted" style="margin:8px 2px 0"><b>Selected:</b> ${esc(selected)} · <b>Matched names:</b> ${aliases.map(esc).join(' · ')||'—'}</div>`;
-
- const fmtDay=k=>{const m=String(k).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return k;return new Date(Number(m[1]),Number(m[2])-1,Number(m[3])).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})};
- dates.innerHTML=dayKeys.map((d,i)=>`<button class="btn ${d===selectedDay?'blue':'soft'} coachHistoryDay" data-i="${i}" style="padding:8px 11px">${esc(fmtDay(d))}</button>`).join('')||'<span class="muted">No route dates saved.</span>';
+ dates.innerHTML=dayKeys.map((d,i)=>`<button class="btn ${d===selectedDay?'blue':'soft'} coachHistoryDay" data-i="${i}" style="padding:8px 11px">${esc(fmtDay(d))}</button>`).join('');
  dates.querySelectorAll('.coachHistoryDay').forEach(b=>b.onclick=()=>{window._coachHistoryDay=dayKeys[Number(b.dataset.i)]||'';renderDriverHistory()});
 
- const dayRows=(grouped.get(selectedDay)||[]).map(h=>historyMergedRow(h,selected));
- list.innerHTML=dayRows.length?dayRows.map(x=>{const h=x.h,finish=h.performanceEndAt||h.lastDelivery||(h.finishedAtMs?new Date(Number(h.finishedAtMs)).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):null),status=x.valid?'<span class="pill" style="background:#dcfce7;color:#15803d">✓ ETA READY</span>':'<span class="pill" style="background:#fff3cd;color:#9a6700">⚠ '+esc(x.reason)+'</span>';return `<div class="item" style="border:1px solid ${x.valid?'#86d7a5':'#e8c76d'}"><div class="row between"><div><div class="drivername">${esc(h.driverName||selected)}</div><div class="muted">${esc(fmtDay(selectedDay))} · ${esc(h.station||x.sr?.station||'?')} · ${esc(h.route||x.sr?.routeCode||'CX ?')}</div></div>${status}</div><div class="row" style="margin-top:10px;gap:8px"><span class="pill">Stops: ${Number(h.totalStops)||Number(x.sr?.totalStops)||0}</span><span class="pill">Stop 5: ${esc(h.stop5AtText||x.sr?.stop5AtText||'MISSING')}</span><span class="pill">Finish: ${esc(finish||'MISSING')}</span><span class="pill">Saved route: ${x.sr?'YES':'NO'}</span>${x.dur?`<span class="pill">Duration: ${Math.round(x.dur)} min</span>`:''}</div><div class="muted" style="margin-top:9px">Completed: ${h.completed?'YES':'NO'} · Last live done: ${Number(h.liveDone)||0}/${Number(h.totalStops)||0} · Packages: ${Number(h.totalPackages)||0} · Last seen: ${h.lastSeenAt?esc(h.lastSeenAt):'—'}</div></div>`}).join(''):'<div class="empty">No history details for this date.</div>';
+ const dayRows=(dayMap.get(selectedDay)||[]).map(h=>historyMergedRow(h,selected));
+ list.innerHTML=dayRows.map(x=>{const h=x.h,finish=h.performanceEndAt||h.lastDelivery||(h.finishedAtMs?new Date(Number(h.finishedAtMs)).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):null),status=x.valid?'<span class="pill" style="background:#dcfce7;color:#15803d">✓ ETA READY</span>':'<span class="pill" style="background:#fff3cd;color:#9a6700">⚠ '+esc(x.reason)+'</span>';return `<div class="item" style="border:1px solid ${x.valid?'#86d7a5':'#e8c76d'}"><div class="row between"><div><div class="drivername">${esc(h.driverName||selected)}</div><div class="muted">${esc(fmtDay(selectedDay))} · ${esc(h.station||x.sr?.station||'?')} · ${esc(h.route||x.sr?.routeCode||'CX ?')}</div></div>${status}</div><div class="row" style="margin-top:10px;gap:8px"><span class="pill">Stops: ${Number(h.totalStops)||Number(x.sr?.totalStops)||0}</span><span class="pill">Stop 5: ${esc(h.stop5AtText||x.sr?.stop5AtText||'MISSING')}</span><span class="pill">Finish: ${esc(finish||'MISSING')}</span><span class="pill">Saved route: ${x.sr?'YES':'NO'}</span>${x.dur?`<span class="pill">Duration: ${Math.round(x.dur)} min</span>`:''}</div><div class="muted" style="margin-top:9px">Completed: YES · Last live done: ${Number(h.liveDone)||0}/${Number(h.totalStops)||0} · Packages: ${Number(h.totalPackages)||0}</div></div>`}).join('');
 }
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function rescueOverrideKey(st,r){return 'coach_not_rescue_'+st+'_'+driverKey(r.name)}
