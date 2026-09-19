@@ -131,8 +131,21 @@ function render(){
  if(rendering)return; rendering=true;
  ensureUI();const st=window._coachStation||'DJX3',deadline=localStorage.getItem('coach_deadline_'+st)||STATIONS[st].deadline;
  const rows=getData(st);
- const calc=rows.map(r=>({...r,_isRescue:isRescueRow(st,r),_p:predict(r,deadline,st)}));const late=calc.filter(r=>!r._isRescue&&r._p.behind>0).length,behind=calc.filter(r=>!r._isRescue).reduce((a,r)=>a+r._p.behind,0),rescueCount=calc.filter(r=>r._isRescue).length;
- document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">Drivers</span><b>${rows.length}</b></div><div class="card stat"><span class="label">Rescue</span><b>${rescueCount}</b></div><div class="card stat"><span class="label">Projected late</span><b>${late}</b></div>`;
+ const calc=rows.map(r=>({...r,_isRescue:isRescueRow(st,r),_p:predict(r,deadline,st)}));
+ const normal=calc.filter(r=>!r._isRescue),activeDrivers=normal.filter(r=>!(Number(r.total)>0&&Number(r.done)>=Number(r.total))).length;
+ const pkgRows=normal.filter(r=>Number(r.totalPackages)>0&&Number.isFinite(Number(r.deliveredPackages)));
+ const deliveredPkgs=pkgRows.reduce((a,r)=>a+Number(r.deliveredPackages||0),0),totalPkgs=pkgRows.reduce((a,r)=>a+Number(r.totalPackages||0),0);
+ const deliveredPct=totalPkgs>0?Math.round(deliveredPkgs/totalPkgs*100):null;
+ const projectedReturns=normal.reduce((sum,r)=>{
+   if(Number(r.total)>0&&Number(r.done)>=Number(r.total))return sum;
+   const totalPackages=Number(r.totalPackages)||0,delivered=Number(r.deliveredPackages)||0;
+   if(totalPackages<=0)return sum;
+   const remainingPackages=Math.max(0,totalPackages-delivered);
+   const behindStops=Math.max(0,Number(r._p.behind)||0),remainingStops=Math.max(0,Number(r.total||0)-Number(r.done||0));
+   if(!behindStops||!remainingStops)return sum;
+   return sum+Math.min(remainingPackages,Math.ceil(remainingPackages*(behindStops/remainingStops)));
+ },0);
+ document.getElementById('liveSummary').innerHTML=`<div class="card stat"><span class="label">PACKAGES DELIVERED</span><b>${deliveredPct==null?'—':deliveredPct+'%'}</b></div><div class="card stat"><span class="label">PROJECTED RETURNS</span><b>${projectedReturns}</b></div><div class="card stat"><span class="label">DRIVERS STILL ON ROUTE</span><b>${activeDrivers}</b></div>`;
  document.getElementById('liveList').innerHTML=calc.length?calc.sort((a,b)=>{
  if(a._isRescue!==b._isRescue)return a._isRescue?-1:1;
  const af=Number(a.total)>0&&Number(a.done)>=Number(a.total),bf=Number(b.total)>0&&Number(b.done)>=Number(b.total);
