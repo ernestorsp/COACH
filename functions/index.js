@@ -115,7 +115,7 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
       const clean={station,day,route,routes,routeCount:routes.length,isRescue,name,driverKey,historyId,done,total,amazonAvg:Number(r.amazonAvg)||null,recentPace:Number(r.recentPace)||null,lastDelivery,amazonProjectedRTS:String(r.amazonProjectedRTS||'').slice(0,30)||null,capturedAt,capturedMs,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
       if(isRescue){
         batch.set(db.doc('liveRescues/'+station+'_'+driverKey),clean,{merge:true});
-        batch.set(db.doc('rescueHistory/'+station+'_'+day+'_'+driverKey),{...clean,dateKey:day},{merge:true});
+        batch.set(db.doc('liveRoutes/'+station+'_RESCUE_'+driverKey),clean,{merge:true});
       }else{
         batch.set(db.doc('liveRoutes/'+station+'_'+route),clean,{merge:true});
         const snapId=station+'_'+day+'_'+route+'_'+capturedMs;
