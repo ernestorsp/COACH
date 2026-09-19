@@ -131,10 +131,11 @@ function ensureLiveEffects(){
  if(document.getElementById('coach-live-effects-v2'))return;
  const st=document.createElement('style');st.id='coach-live-effects-v2';
  st.textContent=`
- .coachRouteProgress{position:relative!important;overflow:hidden!important;isolation:isolate}
+ .coachRouteProgress{position:relative!important;overflow:hidden!important}
  .coachRouteProgress>*{position:relative;z-index:2}
- .coachRouteActive:after{content:"";display:block!important;position:absolute!important;z-index:1!important;top:-80%!important;left:-42%!important;width:28%!important;height:270%!important;pointer-events:none!important;background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0.08) 25%,rgba(255,255,255,0.92) 48%,rgba(255,255,255,0.18) 62%,transparent 100%)!important;box-shadow:0 0 24px rgba(255,255,255,.55);transform:rotate(8deg);animation:coachLiveSweep 2.4s linear infinite!important}
- @keyframes coachLiveSweep{0%{left:-42%;opacity:0}8%{opacity:1}78%{opacity:1}100%{left:125%;opacity:0}}
+ .coachRouteActive{background-size:100% 100%!important}
+ .coachRouteActive:after{content:"";position:absolute!important;z-index:10!important;inset:0!important;pointer-events:none!important;background:linear-gradient(115deg,transparent 0%,transparent 36%,rgba(255,255,255,.12) 41%,rgba(255,255,255,.95) 48%,rgba(255,255,255,.28) 55%,transparent 62%,transparent 100%)!important;background-size:240% 100%!important;background-position:140% 0!important;animation:coachLiveSweep 1.8s ease-in-out infinite!important;mix-blend-mode:screen}
+ @keyframes coachLiveSweep{0%{background-position:140% 0}100%{background-position:-140% 0}}
  `;
  document.head.appendChild(st);
 }
