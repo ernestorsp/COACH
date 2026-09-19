@@ -132,8 +132,9 @@ function ensureLiveEffects(){
  const st=document.createElement('style');st.id='coach-live-effects-v2';
  st.textContent=`
  .coachRouteProgress{position:relative!important;overflow:hidden!important}
- .coachRouteProgress>div,.coachRouteProgress>span:not(.coachSweep),.coachRouteProgress>button{position:relative;z-index:2}
- .coachSweep{display:block!important;position:absolute!important;z-index:20!important;top:-55%!important;left:-32%!important;width:18%!important;height:220%!important;pointer-events:none!important;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--coach-sweep) 18%,transparent),color-mix(in srgb,var(--coach-sweep) 48%,white),color-mix(in srgb,var(--coach-sweep) 18%,transparent),transparent)!important;box-shadow:0 0 24px color-mix(in srgb,var(--coach-sweep) 32%,transparent)!important;transform:translateX(0) rotate(18deg);will-change:transform}
+ .coachRouteProgress>*{position:relative;z-index:2}
+ .coachRouteActive::before{content:"";position:absolute!important;z-index:4!important;width:54px!important;height:54px!important;border-radius:50%!important;pointer-events:none!important;background:radial-gradient(circle,color-mix(in srgb,var(--coach-sweep) 88%,white) 0%,color-mix(in srgb,var(--coach-sweep) 62%,transparent) 28%,transparent 72%)!important;filter:blur(2px);box-shadow:0 0 16px color-mix(in srgb,var(--coach-sweep) 70%,transparent),0 0 30px color-mix(in srgb,var(--coach-sweep) 35%,transparent);transform:translate(-50%,-50%);left:var(--coach-light-x,0px)!important;top:var(--coach-light-y,0px)!important}
+ .coachRouteFinished::before{display:none!important}
  `;
  document.head.appendChild(st);
 }
@@ -152,20 +153,27 @@ function render(){
  if(!af&&!bf)return (b._p.eta??-Infinity)-(a._p.eta??-Infinity);
  const al=clockMinutes12(a.lastDelivery||a._p.current?.lastDelivery),bl=clockMinutes12(b.lastDelivery||b._p.current?.lastDelivery);
  return (bl??-Infinity)-(al??-Infinity);
-}).map(r=>{const finished=Number(r.total)>0&&Number(r.done)>=Number(r.total),last=r.lastDelivery||r._p.current?.lastDelivery||null,rescue=r._isRescue,routes=(r.routes||[r.route]).join(', ');const pct=Math.max(0,Math.min(100,Number(r.total)>0?(Number(r.done||0)/Number(r.total))*100:0)),tone=finished?{line:'#22c55e',fill:'rgba(34,197,94,.18)',base:'#f0fdf4'}:(rescue?{line:'#8b5cf6',fill:'rgba(139,92,246,.18)',base:'#faf7ff'}:(r._p.behind?{line:'#ef4444',fill:'rgba(239,68,68,.16)',base:'#fff8f8'}:{line:'#3b82f6',fill:'rgba(59,130,246,.15)',base:'#f8fbff'}));return `<div class="item coachRouteProgress ${finished?'coachRouteFinished':'coachRouteActive'}" style="--coach-sweep:${tone.line};border:2px solid ${tone.line};background:linear-gradient(90deg,${tone.fill} 0%,${tone.fill} ${pct}%,${tone.base} ${pct}%,${tone.base} 100%);transition:background .45s ease,border-color .25s ease">${finished?'':'<span class="coachSweep" aria-hidden="true"></span>'}<div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${rescue?'🚑 RESCUE · '+esc(routes):esc(r.route||'')} · ${st}</div></div><span class="pill" style="${finished?'background:#dcfce7;color:#15803d':''}">${r.done||0}/${r.total||0} stops</span></div>${rescue?'<div class="row" style="margin-top:8px"><span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#8b5cf6;color:white;font-size:11px;font-weight:900">🚑 RESCUE DRIVER</span><button class="btn soft coachNotRescue" data-st="'+st+'" data-key="'+esc(driverKey(r.name))+'" style="padding:6px 10px;font-size:11px">Not Rescue — move to drivers</button></div>':''}${finished?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#22c55e;color:white;font-size:11px;font-weight:900">✓ ROUTE COMPLETED</div>':(!r._p.routeLoaded?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#f59e0b;color:white;font-size:11px;font-weight:900">⚠ ROUTE NOT LOADED</div>':'')}${!finished&&r._p.routeLoaded&&!Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#dc2626;color:white;font-size:11px;font-weight:900">⚠ STOP 5 REAL TIME NOT FOUND</div>':''}<div class="addr" style="margin-top:10px">${finished?'COACH FINISH: '+esc(last||'Completed'):'COACH ETA: '+(r._p.eta?fmtMin(r._p.eta):'Learning...')}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · ${Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'Pace since Stop 5 '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'):'Live pace '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data')}${r._p.packages?' · '+r._p.packages+' packages':''}${!finished&&r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div><div class="muted" style="margin-top:4px">${r._p.model} · ${r._p.historyCount}/20 previous routes${r._p.current?.stop5AtText?' · Stop 5 '+esc(r._p.current.stop5AtText):''}</div></div>`}).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
+}).map(r=>{const finished=Number(r.total)>0&&Number(r.done)>=Number(r.total),last=r.lastDelivery||r._p.current?.lastDelivery||null,rescue=r._isRescue,routes=(r.routes||[r.route]).join(', ');const pct=Math.max(0,Math.min(100,Number(r.total)>0?(Number(r.done||0)/Number(r.total))*100:0)),tone=finished?{line:'#22c55e',fill:'rgba(34,197,94,.18)',base:'#f0fdf4'}:(rescue?{line:'#8b5cf6',fill:'rgba(139,92,246,.18)',base:'#faf7ff'}:(r._p.behind?{line:'#ef4444',fill:'rgba(239,68,68,.16)',base:'#fff8f8'}:{line:'#3b82f6',fill:'rgba(59,130,246,.15)',base:'#f8fbff'}));return `<div class="item coachRouteProgress ${finished?'coachRouteFinished':'coachRouteActive'}" style="--coach-sweep:${tone.line};border:2px solid ${tone.line};background:linear-gradient(90deg,${tone.fill} 0%,${tone.fill} ${pct}%,${tone.base} ${pct}%,${tone.base} 100%);transition:background .45s ease,border-color .25s ease"><div class="row between"><div><div class="drivername">${esc(r.name)}</div><div class="muted">${rescue?'🚑 RESCUE · '+esc(routes):esc(r.route||'')} · ${st}</div></div><span class="pill" style="${finished?'background:#dcfce7;color:#15803d':''}">${r.done||0}/${r.total||0} stops</span></div>${rescue?'<div class="row" style="margin-top:8px"><span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#8b5cf6;color:white;font-size:11px;font-weight:900">🚑 RESCUE DRIVER</span><button class="btn soft coachNotRescue" data-st="'+st+'" data-key="'+esc(driverKey(r.name))+'" style="padding:6px 10px;font-size:11px">Not Rescue — move to drivers</button></div>':''}${finished?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#22c55e;color:white;font-size:11px;font-weight:900">✓ ROUTE COMPLETED</div>':(!r._p.routeLoaded?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#f59e0b;color:white;font-size:11px;font-weight:900">⚠ ROUTE NOT LOADED</div>':'')}${!finished&&r._p.routeLoaded&&!Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'<div style="display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;background:#dc2626;color:white;font-size:11px;font-weight:900">⚠ STOP 5 REAL TIME NOT FOUND</div>':''}<div class="addr" style="margin-top:10px">${finished?'COACH FINISH: '+esc(last||'Completed'):'COACH ETA: '+(r._p.eta?fmtMin(r._p.eta):'Learning...')}</div><div class="muted">Deadline ${fmtMin(mins(deadline))} · ${Number.isFinite(Number(r._p.current?.stop5AtMinutes))?'Pace since Stop 5 '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data'):'Live pace '+(r._p.pace?r._p.pace.toFixed(1)+'/h':'collecting data')}${r._p.packages?' · '+r._p.packages+' packages':''}${!finished&&r._p.behind?' · 🔴 ~'+r._p.behind+' stops behind':''}</div><div class="muted" style="margin-top:4px">${r._p.model} · ${r._p.historyCount}/20 previous routes${r._p.current?.stop5AtText?' · Stop 5 '+esc(r._p.current.stop5AtText):''}</div></div>`}).join(''):'<div class="empty">No LIVE data yet. The Chrome collector will feed this station here.</div>';
  document.querySelectorAll('.coachNotRescue').forEach(b=>b.onclick=()=>{localStorage.setItem('coach_not_rescue_'+b.dataset.st+'_'+b.dataset.key,'1');render()});
- document.querySelectorAll('#liveList .coachRouteActive .coachSweep').forEach((el,i)=>{
+ document.querySelectorAll('#liveList .coachRouteActive').forEach((card,i)=>{
    try{
-     el.getAnimations().forEach(a=>a.cancel());
-     const card=el.closest('.coachRouteProgress');
-     const name=(card?.querySelector('.drivername')?.textContent||String(i));
-     let hash=0; for(let j=0;j<name.length;j++)hash=((hash<<5)-hash+name.charCodeAt(j))|0;
-     const duration=5200+(Math.abs(hash)%1800);
-     const delay=-(Math.abs(hash*37)%duration);
-     el.animate(
-       [{transform:'translateX(0) rotate(18deg)',opacity:.08},{opacity:.72,offset:.16},{transform:'translateX(760%) rotate(18deg)',opacity:.08}],
-       {duration,iterations:Infinity,easing:'ease-in-out',delay}
-     );
+     const old=card._coachBorderAnim;
+     if(old)cancelAnimationFrame(old);
+     const name=card.querySelector('.drivername')?.textContent||String(i);
+     let hash=0;for(let j=0;j<name.length;j++)hash=((hash<<5)-hash+name.charCodeAt(j))|0;
+     const duration=10500+(Math.abs(hash)%3500);
+     const phase=(Math.abs(hash*41)%duration)/duration;
+     const started=performance.now()-phase*duration;
+     const tick=(now)=>{
+       if(!card.isConnected)return;
+       const r=card.getBoundingClientRect(),w=r.width,h=r.height,p=2*(w+h);
+       let d=((now-started)%duration)/duration*p,x=0,y=0;
+       if(d<w){x=d;y=0}else if((d-=w)<h){x=w;y=d}else if((d-=h)<w){x=w-d;y=h}else{x=0;y=h-(d-w)}
+       card.style.setProperty('--coach-light-x',x+'px');
+       card.style.setProperty('--coach-light-y',y+'px');
+       card._coachBorderAnim=requestAnimationFrame(tick);
+     };
+     card._coachBorderAnim=requestAnimationFrame(tick);
    }catch(e){}
  });
  rendering=false;
