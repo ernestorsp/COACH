@@ -37,6 +37,14 @@ function twoNamesMatch(a,b){
  for(const x of A){const i=B.findIndex((y,j)=>y===x&&!used.has(j));if(i>=0){used.add(i);matches++;if(matches>=2)return true}}
  return false;
 }
+function usablePriorHistory(st,day,driverName){
+ return HISTORY.filter(h=>h.station===st&&h.day!==day&&h.completed&&twoNamesMatch(driverName,h.driverName)).map(h=>{
+   if(routeDuration(h))return h;
+   const sr=SAVED_ROUTES.find(x=>x.dateKey===h.day&&twoNamesMatch(driverName,x.driverName)&&(!x.station||String(x.station).toUpperCase()===st));
+   const sm=Number(sr?.stop5AtMinutes);
+   return Number.isFinite(sm)?{...h,stop5AtMinutes:sm,stop5AtText:sr?.stop5AtText||h.stop5AtText,totalPackages:Number(h.totalPackages)||Number(sr?.totalPackages)||0,packagesPerStop:Number(h.packagesPerStop)||Number(sr?.packagesPerStop)||0}:h;
+ }).filter(h=>routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+}
 function historyFor(r,st){
  const key=r.driverKey||driverKey(r.name),day=String(r.day||easternDay()),route=String(r.route||'').toUpperCase();
  const stationHistory=HISTORY.filter(h=>h.station===st);
@@ -58,12 +66,12 @@ function historyFor(r,st){
    if(mergedCurrent){mergedCurrent.stop5AtMinutes=routeStop5Minutes;mergedCurrent.stop5AtText=routeStop5Text||mergedCurrent.stop5AtText}
    else{
      const synthetic={driverName:savedRoute.driverName,driverKey:driverKey(savedRoute.driverName),station:st,day,route,totalStops:savedRoute.totalStops,totalPackages:savedRoute.totalPackages,packagesPerStop:savedRoute.packagesPerStop,stop5AtMinutes:routeStop5Minutes,stop5AtText:routeStop5Text,routeLoadedMs:1};
-     const prior=stationHistory.filter(h=>twoNamesMatch(savedRoute.driverName,h.driverName)&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+     const prior=usablePriorHistory(st,day,savedRoute.driverName);
      return{current:synthetic,prior,key:synthetic.driverKey,routeLoaded:true,savedRoute};
    }
  }
  const historyName=savedRoute?.driverName||r.name;
- const prior=stationHistory.filter(h=>twoNamesMatch(historyName,h.driverName)&&h.day!==day&&h.completed&&routeDuration(h)).sort((a,b)=>String(b.day).localeCompare(String(a.day))).slice(0,20);
+ const prior=usablePriorHistory(st,day,historyName);
  return{current:mergedCurrent,prior,key:driverKey(historyName)||key,routeLoaded:!!savedRoute||Number(mergedCurrent?.routeLoadedMs)>0,savedRoute};
 }
 function predict(r,deadline,st){
