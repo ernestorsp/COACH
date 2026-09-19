@@ -79,6 +79,7 @@ function historyFor(r,st){
 }
 function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current,prior}=historyFor(r,st);
+ const matchedPrior=completedPriorHistory(st,String(r.day||easternDay()),r.name);
  const stop5=Number(current?.stop5AtMinutes),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
