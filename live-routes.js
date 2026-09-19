@@ -195,12 +195,33 @@ function renderDriverHistoryDetail(){
      const stops=Number(h.totalStops)||Number(sr?.totalStops)||0,packages=Number(h.totalPackages)||Number(sr?.totalPackages)||0,route=String(h.route||sr?.routeCode||'').trim();
      const bad=[!route,!Number.isFinite(stop5),!Number.isFinite(finishM),!stops,!packages];
      const fld=(lab,val,b)=>`<div style="flex:1;min-width:145px;padding:11px;border:1px solid ${b?'#ef4444':'#cfe0ed'};background:${b?'#fff1f2':'#f9fcff'};border-radius:12px"><div class="label" style="color:${b?'#dc2626':''}">${lab}${b?' ⚠':''}</div><b style="color:${b?'#b91c1c':''}">${esc(String(val||'MISSING'))}</b></div>`;
-     return `<div class="item" style="border:2px solid ${bad.some(Boolean)?'#ef4444':'#b8dfc5'}"><div class="row between"><div><div class="drivername">${esc(fmtDay(h.day||h.dateKey||''))}</div><div class="muted">${esc(h.station||sr?.station||'?')}</div></div><button class="btn soft historyDetailEdit" data-i="${i}">✏ Edit</button></div><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">${fld('ROUTE',route,bad[0])}${fld('STOP 5 START',fmtClock(stop5),bad[1])}${fld('LAST DELIVERY',fmtClock(finishM),bad[2])}${fld('STOPS',stops,bad[3])}${fld('PACKAGES',packages,bad[4])}</div>${bad.some(Boolean)?'<div style="margin-top:9px;color:#b91c1c;font-weight:700">⚠ Review the red fields. COACH could not interpret these values correctly.</div>':''}</div>`;
+     return `<div class="item" style="border:2px solid ${bad.some(Boolean)?'#ef4444':'#b8dfc5'}"><div class="row between"><div><div class="drivername">${esc(fmtDay(h.day||h.dateKey||''))}</div><div class="muted">${esc(h.station||sr?.station||'?')}</div></div><div class="row" style="gap:7px"><button class="btn soft historyDetailPaste" data-i="${i}">📋 Paste full route</button><button class="btn soft historyDetailEdit" data-i="${i}">✏ Edit</button></div></div><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">${fld('ROUTE',route,bad[0])}${fld('STOP 5 START',fmtClock(stop5),bad[1])}${fld('LAST DELIVERY',fmtClock(finishM),bad[2])}${fld('STOPS',stops,bad[3])}${fld('PACKAGES',packages,bad[4])}</div>${bad.some(Boolean)?'<div style="margin-top:9px;color:#b91c1c;font-weight:700">⚠ Review the red fields. COACH could not interpret these values correctly.</div>':''}</div>`;
    }).join('')||'<div class="empty">No completed routes saved for this driver.</div>';
  }catch(err){
    console.error('history detail render',err);
    list.innerHTML='<div class="empty" style="border-color:#ef4444;color:#b91c1c"><b>COACH could not render this history record.</b><br>Open Edit after the next refresh or review the stored route data.</div>';
  }
+ list.querySelectorAll('.historyDetailPaste').forEach(btn=>btn.onclick=async()=>{
+   const h=rows[Number(btn.dataset.i)],sr=findSaved(h);if(!h?.id)return alert('This record has no editable document ID.');
+   const raw=prompt('Paste the FULL Amazon route here. COACH will use actual delivery times, not Planned times.');if(!raw?.trim())return;
+   const clean=String(raw).replace(/\*\*/g,'').replace(/\u00a0/g,' ');
+   const routeHits=[...clean.matchAll(/\bCX\s*([A-Z0-9-]+)\b/gi)].map(m=>'CX'+m[1].toUpperCase());
+   const route=routeHits.length?routeHits.sort((a,b)=>routeHits.filter(x=>x===b).length-routeHits.filter(x=>x===a).length)[0]:String(h.route||sr?.routeCode||'').trim();
+   const stopRe=/(?:^|\n)\s*(\d{1,3})\s*\n([\s\S]*?)(?=(?:\n\s*\d{1,3}\s*\n)|(?:\n\s*Return\b)|$)/g;let m,records=[];
+   while((m=stopRe.exec(clean))){const n=+m[1],block=m[2];const times=[...block.matchAll(/\bat\s+(\d{1,2}:\d{2}\s*(?:am|pm))\b/gi)].map(x=>x[1]);const delivered=/\bdeliver(?:y|ies)\b/i.test(block)&&!/^(?:[\s\S]*?)Pickup failed/i.test(block);const nums=[...block.matchAll(/\b(\d+)\s*\/\s*(\d+)\s+deliver(?:y|ies)\b/gi)].map(x=>({done:+x[1],total:+x[2]}));records.push({n,block,times,delivered,nums})}
+   const r5=records.find(r=>r.n===5),s5text=r5?.times?.[0]||'',s5m=parseClock(s5text);
+   const actual=[];records.forEach(r=>r.times.forEach(t=>{const mm=parseClock(t);if(Number.isFinite(mm)&&/\bdeliver(?:y|ies)\b/i.test(r.block))actual.push({n:r.n,m:mm,t})}));
+   let last=null;if(actual.length){last=actual[0];for(const x of actual){if(x.m>(last?.m??-1))last=x}}
+   const fm=last?.m;
+   const stops=records.length?Math.max(...records.map(r=>r.n)):Number(h.totalStops)||Number(sr?.totalStops)||0;
+   let packages=0;records.forEach(r=>r.nums.forEach(x=>packages+=x.total));
+   const summary='Detected from pasted route:\n\nRoute: '+(route||'MISSING')+'\nStop 5 actual: '+(Number.isFinite(s5m)?fmtClock(s5m):'MISSING')+'\nLast delivery actual: '+(Number.isFinite(fm)?fmtClock(fm):'MISSING')+'\nStops: '+(stops||'MISSING')+'\nDelivery packages: '+(packages||'MISSING')+'\n\nSave these corrected values?';
+   if(!confirm(summary))return;
+   if(!route||!Number.isFinite(s5m)||!Number.isFinite(fm)||!stops)return alert('COACH could not safely detect all required fields. Nothing was changed.');
+   const day=String(h.day||h.dateKey||''),p=day.split('-').map(Number);if(p.length!==3||p.some(n=>!Number.isFinite(n)))return alert('This route date is invalid.');
+   const base=new Date(Date.UTC(p[0],p[1]-1,p[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
+   try{const db=await dbReady();const patch={route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),historyManualEdit:true,historyManualEditAt:Date.now(),historyRepairSource:'pasted-full-route'};if(packages>0)patch.totalPackages=packages;await updateDoc(doc(db,'driverRouteHistory',h.id),patch);renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
+ });
  list.querySelectorAll('.historyDetailEdit').forEach(btn=>btn.onclick=async()=>{
    const h=rows[Number(btn.dataset.i)],sr=findSaved(h);if(!h?.id)return alert('This record has no editable document ID.');
    const hs5=Number(h.stop5AtMinutes),rs5=Number(sr?.stop5AtMinutes),currentS5=Number.isFinite(hs5)?hs5:(Number.isFinite(rs5)?rs5:null),fms=toMs(h.finishedAtMs),currentFinish=fms!=null?fmtClock(easternClock(fms)):String(h.performanceEndAt||h.lastDelivery||'');
