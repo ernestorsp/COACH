@@ -118,7 +118,11 @@ function predict(r,deadline,st){
    eta=pace>0?(usingAssumedStop5?stop5+Math.max(0,total-5)/pace*60:nowM+Math.max(0,total-done)/pace*60):null;
    if(histPace)model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
  }
- const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
+ // Keep the displayed/behind pace consistent with the same personal-history duration used by ETA.
+ // Old history rows may contain a bad recentPace (for example 1.0/h), so never let that override
+ // a valid Stop-5-to-finish duration reconstructed from the driver's saved route history.
+ const durationPace=histDur&&total>5?Math.max(0,total-5)/(histDur/60):0;
+ const pace=currentPace||durationPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
  return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps,usingAssumedStop5,stop5UsedText:usingAssumedStop5?assumedStop5Text:(current?.stop5AtText||null)};
 }
 function ensureUI(){
