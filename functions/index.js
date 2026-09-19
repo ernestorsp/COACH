@@ -116,6 +116,9 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY]}, async (req,res)=
       if(isRescue){
         batch.set(db.doc('liveRescues/'+station+'_'+driverKey),clean,{merge:true});
         batch.set(db.doc('liveRoutes/'+station+'_RESCUE_'+driverKey),clean,{merge:true});
+        // If this person was seen earlier today as a normal single-CX route, remove that day's
+        // performance record so a rescue day can never contaminate the driver's delivery-speed history.
+        batch.delete(db.doc('driverRouteHistory/'+historyId));
       }else{
         batch.set(db.doc('liveRoutes/'+station+'_'+route),clean,{merge:true});
         const snapId=station+'_'+day+'_'+route+'_'+capturedMs;
