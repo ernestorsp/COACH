@@ -26,9 +26,17 @@ function easternDay(ms=Date.now()){
  const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ms));
  const o=Object.fromEntries(p.map(x=>[x.type,x.value]));return o.year+'-'+o.month+'-'+o.day;
 }
+function validMinute(v){return v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))}
+function historyFinishMinute(h){
+ if(validMinute(h?.performanceEndMinutes))return Number(h.performanceEndMinutes);
+ if(validMinute(h?.lastDeliveryMinutes))return Number(h.lastDeliveryMinutes);
+ const t=clockMinutes12(h?.performanceEndAt||h?.lastDelivery);if(Number.isFinite(t))return t;
+ return h?.finishedAtMs?easternClock(Number(h.finishedAtMs)):null;
+}
 function routeDuration(h){
- if(!h?.finishedAtMs||!Number.isFinite(Number(h.stop5AtMinutes)))return null;
- const finish=easternClock(Number(h.finishedAtMs));let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
+ if(!validMinute(h?.stop5AtMinutes))return null;
+ const finish=historyFinishMinute(h);if(!Number.isFinite(finish))return null;
+ let x=finish-Number(h.stop5AtMinutes);if(x<0)x+=1440;return x>0&&x<900?x:null;
 }
 let HISTORY=[],SAVED_ROUTES=[],RESCUE_HISTORY=[];
 function nameTokens(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[]}
@@ -104,7 +112,7 @@ function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current}=historyFor(r,st);
  const matchedPrior=completedPriorHistory(st,String(r.day||easternDay()),r.name);
  const prior=usablePriorHistory(st,String(r.day||easternDay()),r.name);
- const realStop5=Number(current?.stop5AtMinutes),assumedStop5Text=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,assumedStop5=mins(assumedStop5Text),stop5=Number.isFinite(realStop5)?realStop5:assumedStop5,usingAssumedStop5=!Number.isFinite(realStop5),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
+ const realStop5=validMinute(current?.stop5AtMinutes)?Number(current.stop5AtMinutes):null,assumedStop5Text=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,assumedStop5=mins(assumedStop5Text),stop5=Number.isFinite(realStop5)?realStop5:assumedStop5,usingAssumedStop5=!Number.isFinite(realStop5),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
  let histDur=null;
@@ -228,8 +236,8 @@ function renderDriverHistoryDetail(){
  try{
    list.innerHTML=rows.map((h,i)=>{
      const sr=findSaved(h);
-     const hs5=Number(h.stop5AtMinutes),rs5=Number(sr?.stop5AtMinutes),stop5=Number.isFinite(hs5)?hs5:(Number.isFinite(rs5)?rs5:null);
-     const fms=toMs(h.finishedAtMs),finishM=fms!=null?easternClock(fms):clockMinutes12(h.performanceEndAt||h.lastDelivery);
+     const hs5=validMinute(h.stop5AtMinutes)?Number(h.stop5AtMinutes):null,rs5=validMinute(sr?.stop5AtMinutes)?Number(sr.stop5AtMinutes):null,stop5=Number.isFinite(hs5)?hs5:(Number.isFinite(rs5)?rs5:null);
+     const finishM=historyFinishMinute(h);
      const stops=Number(h.totalStops)||Number(sr?.totalStops)||0,packages=Number(h.totalPackages)||Number(sr?.totalPackages)||0,route=String(h.route||sr?.routeCode||'').trim();
      const bad=[!route,!Number.isFinite(stop5),!Number.isFinite(finishM),!stops,!packages];
      const fld=(lab,val,b)=>`<div style="flex:1;min-width:145px;padding:11px;border:1px solid ${b?'#ef4444':'#cfe0ed'};background:${b?'#fff1f2':'#f9fcff'};border-radius:12px"><div class="label" style="color:${b?'#dc2626':''}">${lab}${b?' ⚠':''}</div><b style="color:${b?'#b91c1c':''}">${esc(String(val||'MISSING'))}</b></div>`;
@@ -261,11 +269,11 @@ function renderDriverHistoryDetail(){
    // A pasted full route is richer than just start/finish: preserve every actual stop time we can read.
    // The ETA model can then learn this driver's pace at 1 PM vs 4 PM vs 7 PM, etc.
    const timed=actual.slice().sort((a,b)=>a.m-b.m||a.n-b.n),paceSamples=timed.map(x=>({ms:base.getTime()+x.m*60000,done:x.n,total:Number(stops),packages:null,totalPackages:packages||null,source:'pasted-route'}));
-   try{const db=await dbReady();const patch={route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),historyManualEdit:true,historyManualEditAt:Date.now(),historyRepairSource:'pasted-full-route',paceSamples};if(packages>0)patch.totalPackages=packages;await updateDoc(doc(db,'driverRouteHistory',h.id),patch);renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
+   try{const db=await dbReady();const patch={route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),performanceEndMinutes:fm,lastDelivery:fmtClock(fm),lastDeliveryMinutes:fm,totalStops:Number(stops),historyManualEdit:true,historyManualEditAt:Date.now(),historyRepairSource:'pasted-full-route',paceSamples};if(packages>0)patch.totalPackages=packages;await updateDoc(doc(db,'driverRouteHistory',h.id),patch);renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
  });
  list.querySelectorAll('.historyDetailEdit').forEach(btn=>btn.onclick=async()=>{
    const h=rows[Number(btn.dataset.i)],sr=findSaved(h);if(!h?.id)return alert('This record has no editable document ID.');
-   const hs5=Number(h.stop5AtMinutes),rs5=Number(sr?.stop5AtMinutes),currentS5=Number.isFinite(hs5)?hs5:(Number.isFinite(rs5)?rs5:null),fms=toMs(h.finishedAtMs),currentFinish=fms!=null?fmtClock(easternClock(fms)):String(h.performanceEndAt||h.lastDelivery||'');
+   const hs5=validMinute(h.stop5AtMinutes)?Number(h.stop5AtMinutes):null,rs5=validMinute(sr?.stop5AtMinutes)?Number(sr.stop5AtMinutes):null,currentS5=Number.isFinite(hs5)?hs5:(Number.isFinite(rs5)?rs5:null),currentFinish=Number.isFinite(historyFinishMinute(h))?fmtClock(historyFinishMinute(h)):String(h.performanceEndAt||h.lastDelivery||'');
    const route=prompt('Route / CX',h.route||sr?.routeCode||'');if(route===null)return;
    const s5=prompt('Stop 5 start (1:30 PM or 13:30)',fmtClock(currentS5));if(s5===null)return;const s5m=parseClock(s5);
    const fin=prompt('Last delivery (6:45 PM or 18:45)',currentFinish);if(fin===null)return;const fm=parseClock(fin);
@@ -275,7 +283,7 @@ function renderDriverHistoryDetail(){
    const day=String(h.day||h.dateKey||''),p=day.split('-').map(Number);if(p.length!==3||p.some(n=>!Number.isFinite(n)))return alert('This route date is invalid.');
    // Build the edited finish timestamp using local Eastern wall-clock intent; ETA uses only the clock time from this value.
    const base=new Date(Date.UTC(p[0],p[1]-1,p[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
-   try{const db=await dbReady();await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
+   try{const db=await dbReady();await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),performanceEndMinutes:fm,lastDelivery:fmtClock(fm),lastDeliveryMinutes:fm,totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});renderDriverHistoryDetail()}catch(e){alert('Could not save: '+(e?.message||e))}
  });
 }
 function renderDriverHistory(){
@@ -309,7 +317,7 @@ function renderDriverHistory(){
    const stops=prompt('Total stops',String(Number(h.totalStops)||Number(x.sr?.totalStops)||''));if(stops===null)return;const packages=prompt('Total packages',String(Number(h.totalPackages)||Number(x.sr?.totalPackages)||''));if(packages===null)return;
    if(!Number.isFinite(s5m)||!Number.isFinite(fm)||!Number.isFinite(Number(stops))||!Number.isFinite(Number(packages)))return alert('Check the red/missing values. Times must be like 1:30 PM or 13:30, and stops/packages must be numbers.');
    const day=String(h.day||h.dateKey||selectedDay),parts=day.split('-').map(Number),base=new Date(Date.UTC(parts[0],parts[1]-1,parts[2],5,0,0));let finishMs=base.getTime()+fm*60000;if(fm<s5m)finishMs+=86400000;
-   try{await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),lastDelivery:fmtClock(fm),totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});}catch(e){alert('Could not save: '+(e?.message||e))}
+   try{await updateDoc(doc(db,'driverRouteHistory',h.id),{route:String(route).trim().toUpperCase(),stop5AtMinutes:s5m,stop5AtText:fmtClock(s5m),finishedAtMs:finishMs,performanceEndAt:fmtClock(fm),performanceEndMinutes:fm,lastDelivery:fmtClock(fm),lastDeliveryMinutes:fm,totalStops:Number(stops),totalPackages:Number(packages),historyManualEdit:true,historyManualEditAt:Date.now()});}catch(e){alert('Could not save: '+(e?.message||e))}
  })}
 let LIVE={DJX3:[],DJX4:[]},RESCUES={DJX3:[],DJX4:[]};
 function rescueOverrideKey(st,r){return 'coach_not_rescue_'+st+'_'+driverKey(r.name)}
