@@ -175,7 +175,7 @@ exports.liveIngest = onRequest({secrets:[COACH_COLLECTOR_KEY,RESEND_API_KEY,COAC
         const snapId=station+'_'+day+'_'+route+'_'+capturedMs;
         batch.set(db.doc('liveSnapshots/'+snapId),clean);
       }
-      const hist={station,day,dateKey:day,route,driverName:name,driverKey,totalStops:total,liveDone:done,lastSeenAt:capturedAt,lastSeenMs:capturedMs,amazonAvg:clean.amazonAvg,recentPace:clean.recentPace,amazonProjectedRTS:clean.amazonProjectedRTS,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+      const hist={station,day,dateKey:day,route,driverName:name,driverKey,totalStops:total,liveDone:done,lastSeenAt:capturedAt,lastSeenMs:capturedMs,amazonAvg:clean.amazonAvg,recentPace:clean.recentPace,amazonProjectedRTS:clean.amazonProjectedRTS,deliveredPackages:clean.deliveredPackages,totalPackages:clean.totalPackages,packagesPerStop:clean.totalPackages&&total?clean.totalPackages/total:null,updatedAt:admin.firestore.FieldValue.serverTimestamp()};
       // Preserve the minute-by-minute progress we actually saw. These compact samples let COACH
       // learn each driver's speed by time of day instead of reducing a whole route to one average.
       // arrayUnion is idempotent for an identical sample and keeps the history attached to that route/day.
