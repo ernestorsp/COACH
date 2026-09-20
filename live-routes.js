@@ -112,7 +112,11 @@ function predict(r,deadline,st){
  const done=Number(r.done||0),total=Number(r.total||0),nowM=easternClock(),{current}=historyFor(r,st);
  const matchedPrior=completedPriorHistory(st,String(r.day||easternDay()),r.name);
  const prior=usablePriorHistory(st,String(r.day||easternDay()),r.name);
- const realStop5=validMinute(current?.stop5AtMinutes)?Number(current.stop5AtMinutes):null,assumedStop5Text=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,assumedStop5=mins(assumedStop5Text),stop5=Number.isFinite(realStop5)?realStop5:assumedStop5,usingAssumedStop5=!Number.isFinite(realStop5),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
+ // Stop 5 priority is strict: REAL route time first; otherwise ALWAYS use the editable station "Stop 5 time".
+ // Never borrow Stop 5 from old history for today's starting anchor.
+ const currentDay=String(r.day||easternDay());
+ const realStop5=(String(current?.day||current?.dateKey||currentDay)===currentDay&&validMinute(current?.stop5AtMinutes))?Number(current.stop5AtMinutes):null;
+ const assumedStop5Text=localStorage.getItem('coach_stop5_'+st)||STATIONS[st].assumedStop5,assumedStop5=mins(assumedStop5Text),stop5=Number.isFinite(realStop5)?realStop5:assumedStop5,usingAssumedStop5=!Number.isFinite(realStop5),pkg=Number(current?.totalPackages)||0,pps=pkg&&total?pkg/total:null;
  let currentPace=0;
  if(Number.isFinite(stop5)&&done>5){let elapsed=nowM-stop5;if(elapsed<0)elapsed+=1440;if(elapsed>0)currentPace=(done-5)/(elapsed/60)}
  let histDur=null;
