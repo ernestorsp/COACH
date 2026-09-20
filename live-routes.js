@@ -159,16 +159,32 @@ function predict(r,deadline,st){
      }
      eta=stop5+predictedDur;model=smart.profile.sampleCount>=2?(usingAssumedStop5?'Smart history · assumed Stop 5':'Smart history'):(usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history');
  }else{
-   const pace=currentPace||histPace||Number(r.recentPace||r.amazonAvg||0);
-   // Before real progress/route timing is available, estimate from the station's editable assumed Stop 5.
-   eta=pace>0?(usingAssumedStop5?stop5+Math.max(0,total-5)/pace*60:nowM+Math.max(0,total-done)/pace*60):null;
-   if(histPace)model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
+   // No personal history: once today's driver has meaningful progress, today's observed performance
+   // becomes the primary ETA model. This is intentionally independent of old driver history.
+   // We measure from real Stop 5 when available; otherwise from the editable station Stop 5 anchor.
+   // Amazon's current recent pace is blended in only as a stabilizer so one slow/fast interval
+   // does not wildly move the finish time.
+   const amazonPace=Number(r.recentPace||r.amazonAvg||0);
+   const todayPace=currentPace>0&&done>5?currentPace:0;
+   let pace=0;
+   if(todayPace>0&&amazonPace>0){
+     const progressConfidence=clamp((done-5)/35,.35,.85);
+     pace=todayPace*progressConfidence+amazonPace*(1-progressConfidence);
+   }else pace=todayPace||histPace||amazonPace;
+   if(pace>0){
+     // With live progress, project only the work that remains from NOW.
+     // Before progress exists, retain the station Stop-5 startup estimate.
+     eta=todayPace>0?nowM+Math.max(0,total-done)/pace*60:stop5+Math.max(0,total-5)/pace*60;
+     if(todayPace>0)model='Today live performance';
+     else if(histPace)model=usingAssumedStop5?'Personal history · assumed Stop 5':'Personal history';
+   }
  }
  // Keep the displayed/behind pace consistent with the same personal-history duration used by ETA.
  // Old history rows may contain a bad recentPace (for example 1.0/h), so never let that override
  // a valid Stop-5-to-finish duration reconstructed from the driver's saved route history.
  const durationPace=histDur&&total>5?Math.max(0,total-5)/(histDur/60):0;
- const pace=currentPace||(smart.pace>0?smart.pace:0)||durationPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
+ const noHistoryTodayPace=(!histDur&&currentPace>0&&done>5)?(()=>{const ap=Number(r.recentPace||r.amazonAvg||0);if(!(ap>0))return currentPace;const conf=clamp((done-5)/35,.35,.85);return currentPace*conf+ap*(1-conf)})():0;
+ const pace=noHistoryTodayPace||currentPace||(smart.pace>0?smart.pace:0)||durationPace||histPace||Number(r.recentPace||r.amazonAvg||0),late=eta==null?0:eta-mins(deadline),behind=late>0&&pace>0?Math.ceil(late/60*pace):0;
  return{pace,eta,late,behind,current,routeLoaded:!!(current?.routeLoadedMs)||!!historyFor(r,st).savedRoute,historyCount:matchedPrior.length,etaHistoryCount:matchedPrior.length,model,packages:pkg,packagesPerStop:pps,usingAssumedStop5,stop5UsedText:usingAssumedStop5?assumedStop5Text:(current?.stop5AtText||null)};
 }
 function ensureUI(){
